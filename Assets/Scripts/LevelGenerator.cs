@@ -1,158 +1,236 @@
-using System.Collections.Generic;
 using UnityEngine;
 
-public class TopLeftMapGenerator : MonoBehaviour
+public class LevelGenerator : MonoBehaviour
 {
-    [Header("Tile Prefabs (ID order: 0=Empty, 1=OutsideCorner, ..., 8=GhostExit)")]
-    public List<GameObject> tilePrefabs; // Inspector 拉入 9 個 prefab
-    public object ManualLevel;
-    private int[,] levelMap = {
-        {1,2,2,2,2,2,2,2,2,2,2,2,2,7},
-        {2,5,5,5,5,5,5,5,5,5,5,5,5,4},
-        {2,5,3,4,4,3,5,3,4,4,4,3,5,4},
-        {2,6,4,0,0,4,5,4,0,0,0,4,5,4},
-        {2,5,3,4,4,3,5,3,4,4,4,3,5,3},
-        {2,5,5,5,5,5,5,5,5,5,5,5,5,5},
-        {2,5,3,4,4,3,5,3,3,5,3,4,4,4},
-        {2,5,3,4,4,3,5,4,4,5,3,4,4,3},
-        {2,5,5,5,5,5,5,4,4,5,5,5,5,4},
-        {1,2,2,2,2,1,5,4,3,4,4,3,0,4},
-        {0,0,0,0,0,2,5,4,3,4,4,3,0,3},
-        {0,0,0,0,0,2,5,4,4,0,0,0,0,0},
-        {0,0,0,0,0,2,5,4,4,0,3,4,4,8},
-        {2,2,2,2,2,1,5,3,3,0,4,0,0,0},
-        {0,0,0,0,0,0,5,0,0,0,4,0,0,0},
+    public GameObject ManualLevel;
+    public GameObject[] tilePrefabs;
+    
+    private int[,] levelMap =
+    {
+        { 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 7 },
+        { 2, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 4 },
+        { 2, 5, 3, 4, 4, 3, 5, 3, 4, 4, 4, 3, 5, 4 },
+        { 2, 6, 4, 0, 0, 4, 5, 4, 0, 0, 0, 4, 5, 4 },
+        { 2, 5, 3, 4, 4, 3, 5, 3, 4, 4, 4, 3, 5, 3 },
+        { 2, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5 },
+        { 2, 5, 3, 4, 4, 3, 5, 3, 3, 5, 3, 4, 4, 4 },
+        { 2, 5, 3, 4, 4, 3, 5, 4, 4, 5, 3, 4, 4, 3 },
+        { 2, 5, 5, 5, 5, 5, 5, 4, 4, 5, 5, 5, 5, 4 },
+        { 1, 2, 2, 2, 2, 1, 5, 4, 3, 4, 4, 3, 0, 4 },
+        { 0, 0, 0, 0, 0, 2, 5, 4, 3, 4, 4, 3, 0, 3 },
+        { 0, 0, 0, 0, 0, 2, 5, 4, 4, 0, 0, 0, 0, 0 },
+        { 0, 0, 0, 0, 0, 2, 5, 4, 4, 0, 3, 4, 4, 8 },
+        { 2, 2, 2, 2, 2, 1, 5, 3, 3, 0, 4, 0, 0, 0 },
+        { 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 4, 0, 0, 0 },
     };
+
+    private int[,] rotationMap;
 
     void Start()
     {
-        // 關閉 ManualLevel
-        GameObject ManualLevel = GameObject.Find("ManualLevel");
+        // Hide ManualLevel
         if (ManualLevel != null) ManualLevel.SetActive(false);
 
-        // 生成左上角地圖
-        InstantiateTopLeftMap(levelMap);
+        rotationMap = new int[levelMap.GetLength(0), levelMap.GetLength(1)];
+        GenerateLevel(levelMap, rotationMap);
     }
 
-    #region Instantiate & Rotation
-
-    void InstantiateTopLeftMap(int[,] map)
+    // ------Main Function------
+    void GenerateLevel(int[,] map, int[,] rotations)
     {
         int rows = map.GetLength(0);
         int cols = map.GetLength(1);
 
-        for (int i = 0; i < rows; i++)
+        for (int y = 0; y < rows; y++)
         {
-            for (int j = 0; j < cols; j++)
+            for (int x = 0; x < cols; x++)
             {
-                int tile = map[i, j];
-                if (tile < 0 || tile >= tilePrefabs.Count) continue;
+                int tile = map[y, x];
+                
+                int rotation = 0;
 
-                GameObject prefab = tilePrefabs[tile];
-                if (prefab == null) continue;
+                switch (tile)
+                {
+                    case 2: // Outside wall
+                    case 4: // Inside wall
+                        rotation = CalcWallRotation(x, y, map);
+                        break;
 
-                Vector3 pos = new Vector3(j, -i, 0);
-                Quaternion rot = GetTileRotation(map, i, j);
-                Instantiate(prefab, pos, rot, this.transform);
+                    case 1: // Outside corner
+                    case 3: // Inside corner
+                        // Check tile 3 on the right border
+                        if (tile == 3 && x == cols - 1) 
+                        {
+                            bool bottomEmpty = (y < rows - 1) && (map[y + 1, x] == 0 || map[y + 1, x] == 5);
+                            bool leftEmpty = (x > 0) && (map[y, x - 1] == 0 || map[y, x - 1] == 5);
+                            
+                            if (bottomEmpty && leftEmpty) 
+                            {
+                                rotation = 90;
+                                break;
+                            }
+                        }
+                        
+                        // normal tile 3
+                        if (tile == 3 && HasAdjacent3(map, x, y))
+                            rotation = CalcInsideCornerParallelWithEmpty(x, y, map);
+                        else
+                            rotation = CalcCornerRotationByWall(x, y, map);
+                        break;
+
+                    case 7: // T junction
+                        rotation = CalcTJunctionRotation(x, y, map);
+                        break;
+
+                    default: // Other tile (5, 6, 8)
+                        rotation = 0;
+                        break;
+                }
+
+                rotations[y, x] = rotation;
+
+                // Generate tiles
+                if (tile >= 0 && tile < tilePrefabs.Length && tilePrefabs[tile] != null)
+                {
+                    Quaternion q = Quaternion.Euler(0, 0, rotation);
+                    GameObject newTile = Instantiate(tilePrefabs[tile], new Vector3(x, -y, 0), q);
+                    newTile.transform.SetParent(this.transform); 
+                }
             }
         }
     }
 
-    Quaternion GetTileRotation(int[,] map, int row, int col)
-    {
-        int tile = Get(map, row, col);
+    // ------Utility Function------
+    bool IsWall(int tile) => tile == 1 || tile == 2 || tile == 3 || tile == 4;
+    bool IsEmpty(int tile) => tile == 0 || tile == 5 || tile == 6;
 
-        int up    = Get(map, row - 1, col);
-        int down  = Get(map, row + 1, col);
-        int left  = Get(map, row, col - 1);
-        int right = Get(map, row, col + 1);
-
-        bool upWalk  = IsWalkable(up);
-        bool downWalk  = IsWalkable(down);
-        bool leftWalk  = IsWalkable(left);
-        bool rightWalk = IsWalkable(right);
-
-        bool upWall  = IsWall(up);
-        bool downWall  = IsWall(down);
-        bool leftWall  = IsWall(left);
-        bool rightWall = IsWall(right);
-
-        switch (tile)
-        {
-            case 1: // Outside Corner (右 + 下 = 0°)
-                if (rightWall && downWall)  return Quaternion.Euler(0,0,0);
-                if (downWall && leftWall)   return Quaternion.Euler(0,0,90);
-                if (leftWall && upWall)     return Quaternion.Euler(0,0,180);
-                if (upWall && rightWall)    return Quaternion.Euler(0,0,270);
-                break;
-
-            case 2: // Outside Wall
-                if (upWall && downWall) return Quaternion.Euler(0,0,90);
-                if (leftWall && rightWall) return Quaternion.Euler(0,0,0);
-                break;
-
-            case 3: // Inside Corner
-                int rightTile = Get(map, row, col + 1);
-                int downTile = Get(map, row + 1, col);
-                int leftTile = Get(map, row, col - 1);
-                int upTile = Get(map, row - 1, col);
-
-                // 多格內角矩形組合
-                if (rightTile == 3 && downTile == 3) return Quaternion.Euler(0,0,90);   // 左上角
-                if (leftTile == 3 && downTile == 3)  return Quaternion.Euler(0,0,270);  // 右上角
-                if (rightTile == 3 && upTile == 3)   return Quaternion.Euler(0,0,0);    // 左下角
-                if (leftTile == 3 && upTile == 3)    return Quaternion.Euler(0,0,180);  // 右下角
-
-                // 單一內角
-                if (rightWall && downWall) return Quaternion.Euler(0,0,0);
-                if (downWall && leftWall)  return Quaternion.Euler(0,0,90);
-                if (leftWall && upWall)    return Quaternion.Euler(0,0,180);
-                if (upWall && rightWall)   return Quaternion.Euler(0,0,270);
-                break;
-
-            case 4: // Inside Wall
-                if (leftWalk && rightWalk) return Quaternion.Euler(0,0,90);
-                if (upWalk && downWalk)   return Quaternion.Euler(0,0,0);
-                break;
-
-            case 7: // T Junction
-                if (leftWalk && rightWalk && downWalk) return Quaternion.Euler(0,0,0);
-                if (upWalk && leftWalk && downWalk)    return Quaternion.Euler(0,0,90);
-                if (leftWalk && rightWalk && upWalk)   return Quaternion.Euler(0,0,180);
-                if (upWalk && rightWalk && downWalk)   return Quaternion.Euler(0,0,270);
-                break;
-
-            case 8: // Ghost Exit
-                return Quaternion.identity;
-        }
-
-        // fallback
-        if (rightWall && downWall) return Quaternion.Euler(0,0,0);
-        if (downWall && leftWall)  return Quaternion.Euler(0,0,90);
-        if (leftWall && upWall)    return Quaternion.Euler(0,0,180);
-        if (upWall && rightWall)   return Quaternion.Euler(0,0,270);
-
-        return Quaternion.identity;
-    }
-
-    int Get(int[,] map, int row, int col)
+    bool HasAdjacent3(int[,] map, int x, int y)
     {
         int rows = map.GetLength(0);
         int cols = map.GetLength(1);
-        if (row < 0 || row >= rows || col < 0 || col >= cols) return -1;
-        return map[row, col];
+        return (x > 0 && map[y, x - 1] == 3) ||
+               (x < cols - 1 && map[y, x + 1] == 3) ||
+               (y > 0 && map[y - 1, x] == 3) ||
+               (y < rows - 1 && map[y + 1, x] == 3);
     }
 
-    bool IsWalkable(int t)
+    // ------Rotation Methods------
+    int CalcWallRotation(int x, int y, int[,] map) // 2 and 4
     {
-        return t == 0 || t == 5 || t == 6;
+        int rows = map.GetLength(0);
+        int cols = map.GetLength(1);
+
+        // Check if the four directions are empty (0, 5, 6). boundaries are not considered empty
+        bool topEmpty = (y > 0) && IsEmpty(map[y - 1, x]);
+        bool bottomEmpty = (y < rows - 1) && IsEmpty(map[y + 1, x]);
+        bool leftEmpty = (x > 0) && IsEmpty(map[y, x - 1]);
+        bool rightEmpty = (x < cols - 1) && IsEmpty(map[y, x + 1]);
+        
+        if (leftEmpty || rightEmpty)
+        {
+            return 90; 
+        }
+        else if (topEmpty || bottomEmpty)
+        {
+            return 0; 
+        }
+        
+        return 0; 
     }
 
-    bool IsWall(int t)
+    int CalcCornerRotationByWall(int x, int y, int[,] map) // 1 and 3
     {
-        if (t == -1) return true;
-        return !IsWalkable(t);
+        int rows = map.GetLength(0);
+        int cols = map.GetLength(1);
+
+        // Check if the four directions are walls
+        bool rightWall = (x < cols - 1) && IsWall(map[y, x + 1]);
+        bool leftWall = (x > 0) && IsWall(map[y, x - 1]);
+        bool topWall = (y > 0) && IsWall(map[y - 1, x]);
+        bool bottomWall = (y < rows - 1) && IsWall(map[y + 1, x]);
+
+        // Check the rotation of walls
+        int rightWallRotation = GetWallRotation(x + 1, y, map);
+        int leftWallRotation = GetWallRotation(x - 1, y, map);
+        int topWallRotation = GetWallRotation(x, y - 1, map);
+        int bottomWallRotation = GetWallRotation(x, y + 1, map);
+        
+        if (rightWall && rightWallRotation == 0 && bottomWall && bottomWallRotation == 90)
+            return 0;
+        
+        if (rightWall && rightWallRotation == 0 && topWall && topWallRotation == 90)
+            return 90;
+        
+        if (leftWall && leftWallRotation == 0 && bottomWall && bottomWallRotation == 90)
+            return 270;
+        
+        if (leftWall && leftWallRotation == 0 && topWall && topWallRotation == 90)
+            return 180;
+
+        // Use a simplified version if the above conditions do not apply
+        if (rightWall && bottomWall) return 0;   // ┌
+        if (rightWall && topWall) return 270;    // └
+        if (leftWall && bottomWall) return 90;   // ┐
+        if (leftWall && topWall) return 180;     // ┘
+
+        return 0;
     }
 
-    #endregion
+    int GetWallRotation(int x, int y, int[,] map)
+    {
+        int rows = map.GetLength(0);
+        int cols = map.GetLength(1);
+        
+        if (x < 0 || y < 0 || x >= cols || y >= rows) return 0;
+        
+        int tile = map[y, x];
+        if (tile != 2 && tile != 4) return 0;
+        
+        return CalcWallRotation(x, y, map);
+    }
+
+    int CalcInsideCornerParallelWithEmpty(int x, int y, int[,] map)  // 3
+    {
+        int rows = map.GetLength(0);
+        int cols = map.GetLength(1);
+
+        // Check if the four directions are empty
+        bool topEmpty = (y > 0) ? (map[y - 1, x] == 0 || map[y - 1, x] == 5) : false;
+        bool bottomEmpty = (y < rows - 1) ? (map[y + 1, x] == 0 || map[y + 1, x] == 5) : false;
+        bool leftEmpty = (x > 0) ? (map[y, x - 1] == 0 || map[y, x - 1] == 5) : false;
+        bool rightEmpty = (x < cols - 1) ? (map[y, x + 1] == 0 || map[y, x + 1] == 5) : false;
+        
+        // Special case: at right edge, rotate 90° if bottom and left tiles are 0 or 5
+        if (x == cols - 1 && bottomEmpty && leftEmpty) 
+        {
+            return 90;
+        }
+        
+        if (rightEmpty && topEmpty) return 270;
+        if (rightEmpty && bottomEmpty) return 180;
+        if (bottomEmpty && leftEmpty) return 90;
+        if (leftEmpty && topEmpty) return 0;
+        
+        return CalcCornerRotationByWall(x, y, map);
+    }
+
+    int CalcTJunctionRotation(int x, int y, int[,] map)  // 7
+    {
+        int rows = map.GetLength(0);
+        int cols = map.GetLength(1);
+
+        // Check if the four directions are walls
+        bool leftWall = (x > 0) && (map[y, x - 1] == 2);
+        bool rightWall = (x < cols - 1) && (map[y, x + 1] == 2);
+        bool topWall = (y > 0) && IsWall(map[y - 1, x]);
+        bool bottomWall = (y < rows - 1) && IsWall(map[y + 1, x]);
+        
+        if (leftWall && rightWall && bottomWall) return 0;
+        if (leftWall && rightWall && topWall) return 180;
+        
+        if (topWall && bottomWall && rightWall) return 90;  // ⊣
+        if (topWall && bottomWall && leftWall) return 270;  // ⊢
+
+        return 0; 
+    }
 }
