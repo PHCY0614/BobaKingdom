@@ -41,6 +41,6 @@ TagManager:
   - name: Default
     uniqueID: 0
     locked: 0
-  - name: Pacstudent
+  - name: Pacstudent and Ghost
     uniqueID: 1814065495
     locked: 0

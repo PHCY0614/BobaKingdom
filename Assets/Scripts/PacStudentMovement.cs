@@ -26,7 +26,7 @@ public class PacStudentMover : MonoBehaviour
         if (audioSource != null)
         {
             audioSource.loop = true;
-            audioSource.Play(); // 新增這行程式碼
+            audioSource.Play(); 
         }
     }
 
