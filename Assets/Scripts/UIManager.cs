@@ -5,17 +5,55 @@ using TMPro;
 public class UIManager : MonoBehaviour
 {
     public TextMeshProUGUI scoreText;
-
     public TextMeshProUGUI timerText;
-
+    public TextMeshProUGUI scaredTimerText;
+    
     // Score
     private int currentScore = 0;
-
     private const string SCORE_FORMAT = "D6";
 
     // Time
     private float totalTime = 0f;
     private bool isTiming = true;
+    private float scaredTimeRemaining = 0f;
+    
+    void Start()
+    {
+        // 確保遊戲開始時，分數顯示為 "000000"
+        UpdateScoreDisplay();
+        if (scaredTimerText != null)
+        {
+            scaredTimerText.gameObject.SetActive(false); // Make sure to hide it
+        }
+    }
+
+    void Update()
+    {
+        if (timerText != null && isTiming)
+        {
+            // 1. 累積時間：使用 Time.deltaTime 確保時間與幀率無關
+            totalTime += Time.deltaTime;
+
+            // 2. 更新 UI 顯示
+            UpdateTimerDisplay(totalTime);
+        }
+
+        //Ghost Scared Timer
+        if (scaredTimeRemaining > 0f)
+        {
+            scaredTimeRemaining -= Time.deltaTime;
+
+            if (scaredTimeRemaining <= 0f)
+            {
+                scaredTimeRemaining = 0f;
+                StopScaredTimer(); // 停止計時器並隱藏 UI
+                // *** (未來 GhostManager 會在這裡被通知切換狀態) ***
+            }
+
+            // 更新 UI 顯示 (負責整數格式和可見性)
+            UpdateScaredTimerDisplay(scaredTimeRemaining);
+        }
+    }
 
     public void LoadLevel1()
     {
@@ -70,7 +108,6 @@ public class UIManager : MonoBehaviour
         float milliseconds = (timeToDisplay * 100) % 100;
 
         // 2. 格式化字串：關鍵在於使用 "D2" 進行零填充
-    
         // mm:ss:msms
         string timeFormat = string.Format("{0:00}:{1:00}:{2:00}", 
             minutes, 
@@ -80,23 +117,41 @@ public class UIManager : MonoBehaviour
         // 更新 TextMeshPro 的內容
         timerText.text = "TIME: " + timeFormat;
     }
-    
-    void Start()
-    {
-        // 確保遊戲開始時，分數顯示為 "000000"
-        UpdateScoreDisplay();
-    }
-
-    void Update()
-    {
-        if (timerText != null && isTiming)
-        {
-            // 1. 累積時間：使用 Time.deltaTime 確保時間與幀率無關
-            totalTime += Time.deltaTime;
         
-            // 2. 更新 UI 顯示
-            UpdateTimerDisplay(totalTime);
+    private void UpdateScaredTimerDisplay(float time)
+    {
+        if (scaredTimerText == null) return;
+
+        // 取得時間的整數秒數，使用 Mathf.CeilToInt 確保倒數時看起來更順暢 (例如 2.9s 顯示為 3)
+        int seconds = Mathf.CeilToInt(time); 
+
+        if (seconds <= 0)
+        {
+            // 當時間歸零，隱藏 UI
+            scaredTimerText.gameObject.SetActive(false);
+        }
+        else
+        {
+            // 時間大於零，顯示 UI 和數值
+            scaredTimerText.gameObject.SetActive(true);
+            scaredTimerText.text = seconds.ToString(); // 顯示為整數
         }
     }
 
+    // 新增：當 PacStudent 吃下大力丸時，GhostManager 會呼叫此方法
+    public void StartScaredTimer(float duration)
+    {
+        if (scaredTimerText == null) return;
+
+        scaredTimeRemaining = duration;
+        // 立即讓 UI 顯示，並開始倒數
+        scaredTimerText.gameObject.SetActive(true); 
+    }
+
+    // 新增：當計時結束或幽靈被吃掉時，GhostManager 會呼叫此方法
+    public void StopScaredTimer()
+    {
+        scaredTimeRemaining = 0f;
+        scaredTimerText.gameObject.SetActive(false);
+    }
 }
