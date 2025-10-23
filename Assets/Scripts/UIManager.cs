@@ -47,7 +47,7 @@ public class UIManager : MonoBehaviour
             {
                 scaredTimeRemaining = 0f;
                 StopScaredTimer(); // 停止計時器並隱藏 UI
-                // *** (未來 GhostManager 會在這裡被通知切換狀態) ***
+                // *** (未來 GhostManager 會在這裡被通知切換狀態)
             }
 
             // 更新 UI 顯示 (負責整數格式和可見性)
