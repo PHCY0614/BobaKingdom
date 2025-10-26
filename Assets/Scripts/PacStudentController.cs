@@ -4,13 +4,12 @@ using UnityEngine;
 
 public class PacStudentController : MonoBehaviour
 {
-    
     [SerializeField]
     private float moveDuration = 0.5f; 
     [SerializeField]
-    private AudioClip movementNoPelletClip; // The sound for moving without eating a pellet
+    private AudioClip pacMovingClip; // The sound for moving without eating a pellet
     [SerializeField]
-    private AudioClip movementWithPelletClip;
+    private AudioClip pacEatClip;
     // Movement
     private bool isMoving = false; 
     private Vector3 targetPosition; 
@@ -18,10 +17,12 @@ public class PacStudentController : MonoBehaviour
     // Input
     private Vector3 lastInput = Vector3.zero;
     private Vector3 currentInput = Vector3.zero; 
+    private Vector3 lastDirection = Vector3.right;
     
     private LevelGenerator levelGenerator; 
     private Animator animator;
     private AudioSource audioSource;
+    private ParticleSystem dustParticles;
     
     void Start()
     {
@@ -29,6 +30,7 @@ public class PacStudentController : MonoBehaviour
         levelGenerator = FindFirstObjectByType<LevelGenerator>();
         animator = GetComponent<Animator>();
         audioSource = GetComponent<AudioSource>();
+        dustParticles = GetComponentInChildren<ParticleSystem>();
         
         if (levelGenerator == null)
         {
@@ -39,13 +41,14 @@ public class PacStudentController : MonoBehaviour
         {
             audioSource.loop = true; 
             audioSource.playOnAwake = false; 
-
-            // *** 關鍵修正：強制停止，確保初始靜音 ***
             audioSource.volume = 0f;
             audioSource.Stop(); 
             Debug.Log("AudioSource initialized. Sound forced to stop at start.");
         }
-        
+        if (dustParticles != null)
+        {
+            dustParticles.Stop(); // Ensure it is stopped at the start
+        }
         transform.position = new Vector3(
             Mathf.Round(transform.position.x), 
             Mathf.Round(transform.position.y), 
@@ -101,17 +104,7 @@ public class PacStudentController : MonoBehaviour
             // Purpose: If we hit a wall while trying to turn, try to continue moving straight.
             if (!canMove) 
             {
-                if (currentInput != Vector3.zero) 
-                {
-                    potentialTarget = currentPosition + currentInput;
-                    gridPos = WorldToGrid(potentialTarget); 
-
-                    if (levelGenerator.IsWalkable(gridPos.x, gridPos.y))
-                    {
-                        directionToTry = currentInput; 
-                        canMove = true;
-                    }
-                }
+                ResetMovementStates(); 
             }
 
             // --- C. Initiate Movement ---
@@ -119,10 +112,9 @@ public class PacStudentController : MonoBehaviour
             {
                 // Calculate the target position and start the smooth movement.
                 targetPosition = currentPosition + directionToTry;
+                lastDirection = directionToTry;
                 if (animator != null)
                 {
-                    // *** 關鍵：重置所有 Bool，然後設定當前方向的 Bool ***
-
                     // 1. 重置所有 Bool 參數為 false (確保只有一個動畫播放)
                     animator.SetBool("IsMovingRight", false);
                     animator.SetBool("IsMovingLeft", false);
@@ -149,12 +141,20 @@ public class PacStudentController : MonoBehaviour
                         animator.SetBool("IsMovingDown", true);
                     }
                 }
-                if (audioSource != null && !audioSource.isPlaying)
+                if (audioSource != null)
                 {
-                    audioSource.volume = 1f;
-                    audioSource.Play(); 
+                    // 只有在音源沒有播放時，才啟動。避免每一幀都重啟。
+                    if (!audioSource.isPlaying)
+                    {
+                        audioSource.clip = pacMovingClip; // 確保設置為走路音效
+                        audioSource.volume = 1f;
+                        audioSource.Play();               // 啟動播放
+                    }
                 }
-    
+                if (dustParticles != null && !dustParticles.isPlaying)
+                {
+                    dustParticles.Play(); // Start playing dust when movement starts
+                }
                 StartCoroutine(MoveToTarget());
             }
         }
@@ -206,14 +206,57 @@ public class PacStudentController : MonoBehaviour
         transform.position = targetPosition;
         currentPosition = targetPosition; // Update current grid position for the next move check
         isMoving = false; // Reset flag: PacStudent has stopped moving (at a grid center)
-        if (currentInput == Vector3.zero && audioSource != null && audioSource.isPlaying)
+    }
+    private void ResetMovementStates()
+    {
+        // 1. 停止動畫
+        if (animator != null)
         {
-            audioSource.Stop(); 
+            animator.SetBool("IsMovingRight", false);
+            animator.SetBool("IsMovingLeft", false);
+            animator.SetBool("IsMovingUp", false);
+            animator.SetBool("IsMovingDown", false);
+            
+            animator.SetBool("IsFacingRight", false);
+            animator.SetBool("IsFacingLeft", false);
+            animator.SetBool("IsFacingUp", false);
+            animator.SetBool("IsFacingDown", false);
+            
+            if (lastDirection == Vector3.right)
+            {
+                animator.SetBool("IsFacingRight", true);
+            }
+            else if (lastDirection == Vector3.left)
+            {
+                animator.SetBool("IsFacingLeft", true);
+            }
+            else if (lastDirection == Vector3.up)
+            {
+                animator.SetBool("IsFacingUp", true);
+            }
+            else if (lastDirection == Vector3.down)
+            {
+                animator.SetBool("IsFacingDown", true);
+            }
+        }
+
+        // 2. 停止音效
+        if (audioSource != null && audioSource.isPlaying)
+        {
+            audioSource.Stop();
             audioSource.volume = 0f;
-            Debug.Log("PacStudent movement sound stopped.");
+        }
+
+        // 3. 停止粒子特效
+        if (dustParticles != null && dustParticles.isPlaying)
+        {
+            dustParticles.Stop();
         }
     
-        yield break;
+        // 4. 重設輸入，確保下次 Update() 會進入 if (!canMove) 區塊
+        currentInput = Vector3.zero; 
+    
+        Debug.Log("Movement States Reset (Animation/Audio/Particles Stopped).");
     }
 }
 
