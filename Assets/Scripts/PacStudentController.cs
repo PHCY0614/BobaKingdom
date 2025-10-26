@@ -24,26 +24,31 @@ public class PacStudentController : MonoBehaviour
     private AudioSource audioSource;
     private ParticleSystem dustParticles;
     
+    void Awake()
+    {
+        // 在 Awake() 中取得元件，確保在 Start() 之前就可以使用
+        audioSource = GetComponent<AudioSource>();
+    
+        // 將音效初始化邏輯移到這裡，確保比 Start() 早執行
+        if (audioSource != null)
+        {
+            audioSource.loop = true; 
+            audioSource.playOnAwake = false; 
+            audioSource.clip = null;
+            audioSource.volume = 0f; // 確保音量歸零
+            audioSource.Stop(); 
+        }
+    }
     void Start()
     {
         // Find the LevelGenerator object in the scene and get its script
         levelGenerator = FindFirstObjectByType<LevelGenerator>();
         animator = GetComponent<Animator>();
-        audioSource = GetComponent<AudioSource>();
         dustParticles = GetComponentInChildren<ParticleSystem>();
-        
+        if (audioSource != null && pacMovingClip != null)
         if (levelGenerator == null)
         {
             Debug.LogError("LevelGenerator not found in the scene! Movement will not work.");
-        }
-        
-        if (audioSource != null)
-        {
-            audioSource.loop = true; 
-            audioSource.playOnAwake = false; 
-            audioSource.volume = 0f;
-            audioSource.Stop(); 
-            Debug.Log("AudioSource initialized. Sound forced to stop at start.");
         }
         if (dustParticles != null)
         {
@@ -58,7 +63,6 @@ public class PacStudentController : MonoBehaviour
         targetPosition = transform.position;
         
         Vector2Int startGrid = WorldToGrid(currentPosition);
-        Debug.Log($"PacStudent STARTING Grid: ({startGrid.x}, {startGrid.y}). Expected (1, 1).");
     }
     
     void Update()
@@ -91,17 +95,33 @@ public class PacStudentController : MonoBehaviour
 
             // --- A. Priority 1: Check the last pressed input (lastInput) ---
             // Purpose: Try to turn in the desired direction (W, A, S, D).
-            potentialTarget = currentPosition + lastInput;
-            gridPos = WorldToGrid(potentialTarget); 
-
-            if (levelGenerator.IsWalkable(gridPos.x, gridPos.y)) 
+            if (lastInput != Vector3.zero) 
             {
-                currentInput = lastInput; // The new direction becomes the current direction
-                directionToTry = lastInput;
-                canMove = true;
+                potentialTarget = currentPosition + lastInput;
+                gridPos = WorldToGrid(potentialTarget); 
+
+                // 🛠 修正 2：修正 IsWalkable 參數錯誤 (傳入 x 和 y)
+                if (levelGenerator.IsWalkable(gridPos.x, gridPos.y)) 
+                {
+                    currentInput = lastInput; // The new direction becomes the current direction
+                    directionToTry = lastInput;
+                    canMove = true;
+                }
             }
             // --- B. Priority 2: If lastInput failed, try the current movement input (currentInput) ---
             // Purpose: If we hit a wall while trying to turn, try to continue moving straight.
+            if (!canMove && currentInput != Vector3.zero) 
+            {
+                potentialTarget = currentPosition + currentInput;
+                gridPos = WorldToGrid(potentialTarget); 
+            
+                // 🛠 修正 2：修正 IsWalkable 參數錯誤 (傳入 x 和 y)
+                if (levelGenerator.IsWalkable(gridPos.x, gridPos.y)) 
+                {
+                    directionToTry = currentInput; 
+                    canMove = true;
+                }
+            }
             if (!canMove) 
             {
                 ResetMovementStates(); 
@@ -254,9 +274,7 @@ public class PacStudentController : MonoBehaviour
         }
     
         // 4. 重設輸入，確保下次 Update() 會進入 if (!canMove) 區塊
-        currentInput = Vector3.zero; 
-    
-        Debug.Log("Movement States Reset (Animation/Audio/Particles Stopped).");
+        currentInput = Vector3.zero;
     }
 }
 
