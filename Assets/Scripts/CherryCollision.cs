@@ -5,6 +5,8 @@ using UnityEngine;
 public class CherryCollision : MonoBehaviour
 {
     private CherryController controller;
+    private const int cherryScore = 100;
+    private UIManager uiManager;
 
     void Start()
     {
@@ -15,6 +17,12 @@ public class CherryCollision : MonoBehaviour
             Debug.LogError("CherryController not found in scene!");
             Destroy(gameObject);
         }
+        
+        uiManager = FindFirstObjectByType<UIManager>();
+        if (uiManager == null)
+        {
+            Debug.LogError("UIManager not found in scene! Score will not be updated.");
+        }
     }
     
     // 額外功能：處理碰撞 (假設 Cherry 有一個 Trigger Collider)
@@ -23,11 +31,15 @@ public class CherryCollision : MonoBehaviour
         // 假設 PacStudent 有一個 Tag 叫做 "PacStudent"
         if (other.CompareTag("PacStudent"))
         {
-            // 執行 PacStudent 吃櫻桃的邏輯（例如加分）
-            Debug.Log("PacStudent ate the cherry! Bonus points added.");
-            
-            // 通知控制器銷毀櫻桃並重新計時
-            controller.DestroyCherry(gameObject);
+            if (uiManager != null)
+            {
+                uiManager.AddScore(cherryScore);
+                Debug.Log($"PacStudent ate the cherry! Bonus points added: {cherryScore}");
+            }
+            if (controller != null)
+            {
+                controller.DestroyCherry(gameObject);
+            }
         }
     }
 }

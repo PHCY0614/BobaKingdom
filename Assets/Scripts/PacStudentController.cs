@@ -4,7 +4,7 @@
 
     public class PacStudentController : MonoBehaviour
     {
-        [SerializeField] private float moveDuration = 0.3f; 
+        [SerializeField] private float moveDuration = 0.2f; 
         [SerializeField] private AudioClip pacMovingClip;
         [SerializeField] private AudioClip pacEatClip;
         [SerializeField] private AudioClip wallCollisionClip;
