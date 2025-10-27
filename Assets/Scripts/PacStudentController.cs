@@ -32,6 +32,9 @@
         private float wallHitCooldownTime = 0.3f; 
         private float wallHitTimer = 0f;
         private bool isPlayingWallSound = false;
+        // Transporter
+        private bool teleporterCooldown = false;
+        private const float teleporterCooldownTime = 0.1f;
         
         void Start()
         { 
@@ -236,6 +239,51 @@
         private void ResetWallSoundFlag()
         {
             isPlayingWallSound = false;
+        }
+        
+        private void OnTriggerEnter2D(Collider2D other)
+        {
+            // C1: Teleporters
+            if (other.CompareTag("Teleporter"))
+            {
+                if (teleporterCooldown)
+                {
+                    return;
+                }
+                
+                Vector3 newPos = transform.position; 
+                GameObject targetTeleporter = null;
+        
+                if (other.name == "TeleporterLeft")
+                {
+                    targetTeleporter = GameObject.Find("TeleporterRight");
+                }
+                else if (other.name == "TeleporterRight")
+                {
+                    targetTeleporter = GameObject.Find("TeleporterLeft");
+                }
+                if (targetTeleporter != null)
+                {
+                    newPos = targetTeleporter.transform.position;
+                    newPos.z = transform.position.z;
+
+                    transform.position = newPos;
+                    currentPosition = newPos;
+                    targetPosition = newPos;
+                    
+                    SetTeleporterCooldown();
+                }
+            }
+        }
+        private void SetTeleporterCooldown()
+        {
+            teleporterCooldown = true;
+            Invoke("ResetTeleporterCooldown", teleporterCooldownTime); 
+        }
+
+        private void ResetTeleporterCooldown()
+        {
+            teleporterCooldown = false;
         }
     }
 
