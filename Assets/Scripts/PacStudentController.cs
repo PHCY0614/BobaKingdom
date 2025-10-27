@@ -232,8 +232,7 @@
 
                 audioSource.PlayOneShot(wallCollisionClip, 2.0f); 
                 isPlayingWallSound = true;
-            
-                // 🔧 改用 Coroutine 取代 Invoke，更容易管理
+                
                 StartCoroutine(ResetWallSoundFlagAfterDelay(wallCollisionClip.length));
             }
             
@@ -273,6 +272,13 @@
                     targetPosition = newPos;
                 
                     StartCoroutine(ResetTeleporterCooldownAfterDelay());
+                }
+            }
+            else if (other.CompareTag("Pellet"))
+            {
+                if (audioSource != null && pacEatClip != null)
+                {
+                    audioSource.PlayOneShot(pacEatClip);
                 }
             }
         }

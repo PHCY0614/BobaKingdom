@@ -19,11 +19,10 @@ public class UIManager : MonoBehaviour
     
     void Start()
     {
-        // 確保遊戲開始時，分數顯示為 "000000"
         UpdateScoreDisplay();
         if (scaredTimerText != null)
         {
-            scaredTimerText.gameObject.SetActive(false); // Make sure to hide it
+            scaredTimerText.gameObject.SetActive(false); 
         }
     }
 
@@ -31,10 +30,7 @@ public class UIManager : MonoBehaviour
     {
         if (timerText != null && isTiming)
         {
-            // 1. 累積時間：使用 Time.deltaTime 確保時間與幀率無關
             totalTime += Time.deltaTime;
-
-            // 2. 更新 UI 顯示
             UpdateTimerDisplay(totalTime);
         }
 
@@ -46,11 +42,10 @@ public class UIManager : MonoBehaviour
             if (scaredTimeRemaining <= 0f)
             {
                 scaredTimeRemaining = 0f;
-                StopScaredTimer(); // 停止計時器並隱藏 UI
+                StopScaredTimer(); 
                 // *** (未來 GhostManager 會在這裡被通知切換狀態)
             }
 
-            // 更新 UI 顯示 (負責整數格式和可見性)
             UpdateScaredTimerDisplay(scaredTimeRemaining);
         }
     }
@@ -81,8 +76,6 @@ public class UIManager : MonoBehaviour
     public void AddScore(int points)
     {
         currentScore += points;
-
-        // 分數增加後，必須更新 UI 顯示
         UpdateScoreDisplay();
     }
 
