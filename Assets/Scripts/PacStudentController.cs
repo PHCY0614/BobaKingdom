@@ -7,7 +7,7 @@
         [SerializeField]
         private float moveDuration = 0.5f; 
         [SerializeField]
-        private AudioClip pacMovingClip; // The sound for moving without eating a pellet
+        private AudioClip pacMovingClip;
         [SerializeField]
         private AudioClip pacEatClip;
         // Movement
@@ -24,21 +24,12 @@
         private AudioSource audioSource;
         private ParticleSystem dustParticles;
         
-        void Awake()
-        {
-            audioSource = GetComponent<AudioSource>();
-        
-            if (audioSource != null)
-            {
-                audioSource.loop = true; 
-                audioSource.Stop(); 
-            }
-        }
         void Start()
         { 
             levelGenerator = FindFirstObjectByType<LevelGenerator>();
             animator = GetComponent<Animator>();
             dustParticles = GetComponentInChildren<ParticleSystem>();
+            audioSource = GetComponent<AudioSource>();
 
             transform.position = new Vector3(
                 Mathf.Round(transform.position.x), 
@@ -54,22 +45,10 @@
         void Update()
         {
             // 1. Gather player input and update lastInput
-            if (Input.GetKeyDown(KeyCode.W))
-            {
-                lastInput = Vector3.up; 
-            }
-            else if (Input.GetKeyDown(KeyCode.S))
-            {
-                lastInput = Vector3.down; 
-            }
-            else if (Input.GetKeyDown(KeyCode.A))
-            {
-                lastInput = Vector3.left; 
-            }
-            else if (Input.GetKeyDown(KeyCode.D))
-            {
-                lastInput = Vector3.right; 
-            }
+            if (Input.GetKeyDown(KeyCode.W)) lastInput = Vector3.up;
+            else if (Input.GetKeyDown(KeyCode.S)) lastInput = Vector3.down;
+            else if (Input.GetKeyDown(KeyCode.A)) lastInput = Vector3.left;
+            else if (Input.GetKeyDown(KeyCode.D)) lastInput = Vector3.right;
             
             Vector3 potentialTarget;
             Vector2Int gridPos;
@@ -121,40 +100,22 @@
                     lastDirection = directionToTry;
                     if (animator != null)
                     {
-                        // 1. 重置所有 Bool 參數為 false (確保只有一個動畫播放)
-                        animator.SetBool("IsMovingRight", false);
-                        animator.SetBool("IsMovingLeft", false);
-                        animator.SetBool("IsMovingUp", false);
-                        animator.SetBool("IsMovingDown", false);
+                        // 1. 設定 Blend Tree 參數 (MoveX 和 MoveY)
+                        // 這將控制移動動畫的方向，並作為靜止時面向的方向
+                        animator.SetFloat("MoveX", directionToTry.x);
+                        animator.SetFloat("MoveY", directionToTry.y);
 
-                        // 2. 根據方向向量設定正確的 Bool 參數為 true
-                        if (directionToTry == Vector3.right)
-                        {
-                            animator.SetBool("IsMovingRight", true);
-                        }
-                        else if (directionToTry == Vector3.left)
-                        {
-                            animator.SetBool("IsMovingLeft", true);
-                        }
-                        else if (directionToTry == Vector3.up)
-                        {
-                            // 注意：Unity 2D 的 Y 軸是正上方
-                            animator.SetBool("IsMovingUp", true);
-                        }
-                        else if (directionToTry == Vector3.down)
-                        {
-                            // 注意：向下是 Vector3.down 或 (0, -1, 0)
-                            animator.SetBool("IsMovingDown", true);
-                        }
+                        // 2. 啟動移動 Blend Tree 狀態
+                        animator.SetBool("IsMoving", true);
                     }
                     if (audioSource != null)
                     {
                         // 只有在音源沒有播放時，才啟動。避免每一幀都重啟。
                         if (!audioSource.isPlaying)
                         {
-                            audioSource.clip = pacMovingClip; // 確保設置為走路音效
+                            audioSource.clip = pacMovingClip;
                             audioSource.volume = 1f;
-                            audioSource.Play();               // 啟動播放
+                            audioSource.Play();            
                         }
                     }
                     if (dustParticles != null && !dustParticles.isPlaying)
@@ -218,39 +179,19 @@
             // 1. 停止動畫
             if (animator != null)
             {
-                animator.SetBool("IsMovingRight", false);
-                animator.SetBool("IsMovingLeft", false);
-                animator.SetBool("IsMovingUp", false);
-                animator.SetBool("IsMovingDown", false);
-                
-                animator.SetBool("IsFacingRight", false);
-                animator.SetBool("IsFacingLeft", false);
-                animator.SetBool("IsFacingUp", false);
-                animator.SetBool("IsFacingDown", false);
-                
-                if (lastDirection == Vector3.right)
-                {
-                    animator.SetBool("IsFacingRight", true);
-                }
-                else if (lastDirection == Vector3.left)
-                {
-                    animator.SetBool("IsFacingLeft", true);
-                }
-                else if (lastDirection == Vector3.up)
-                {
-                    animator.SetBool("IsFacingUp", true);
-                }
-                else if (lastDirection == Vector3.down)
-                {
-                    animator.SetBool("IsFacingDown", true);
-                }
+                // 確保 Idle Blend Tree 使用最後的方向（lastDirection）來顯示靜止圖片
+                // 這是將 lastDirection 儲存為靜止時的方向，供 Idle Blend Tree 使用
+                animator.SetFloat("MoveX", lastDirection.x);
+                animator.SetFloat("MoveY", lastDirection.y);
+            
+                // 關閉 IsMoving，讓 Animator 轉換到 Idle Blend Tree (即靜止圖片)
+                animator.SetBool("IsMoving", false);
             }
 
             // 2. 停止音效
             if (audioSource != null && audioSource.isPlaying)
             {
                 audioSource.Stop();
-                audioSource.volume = 0f;
             }
 
             // 3. 停止粒子特效
