@@ -17,6 +17,11 @@ public class UIManager : MonoBehaviour
     private bool isTiming = true;
     private float scaredTimeRemaining = 0f;
     
+    // Ghost
+    private bool isRecovering = false;
+    private GhostManager ghostManager;
+    
+    
     void Start()
     {
         UpdateScoreDisplay();
@@ -38,12 +43,29 @@ public class UIManager : MonoBehaviour
         if (scaredTimeRemaining > 0f)
         {
             scaredTimeRemaining -= Time.deltaTime;
+            
+            if (scaredTimeRemaining <= 3.0f && !isRecovering)
+            {
+                isRecovering = true;
+                // 呼叫 GhostManager 進入 Recovering 狀態
+                if (ghostManager != null)
+                {
+                    // ghostManager.SetGhostState(GhostState.Recovering); 
+                    Debug.Log("SCARED Timer: Entering Recovering State.");
+                }
+                // 💡 未來：在這裡改變音樂/動畫為閃爍狀態
+            }
 
             if (scaredTimeRemaining <= 0f)
             {
                 scaredTimeRemaining = 0f;
                 StopScaredTimer(); 
                 // *** (未來 GhostManager 會在這裡被通知切換狀態)
+                if (ghostManager != null)
+                {
+                    // ghostManager.SetGhostState(GhostState.Normal); 
+                    Debug.Log("SCARED Timer: Timer expired, setting Ghosts to Normal.");
+                }
             }
 
             UpdateScaredTimerDisplay(scaredTimeRemaining);
@@ -127,7 +149,7 @@ public class UIManager : MonoBehaviour
         {
             // 時間大於零，顯示 UI 和數值
             scaredTimerText.gameObject.SetActive(true);
-            scaredTimerText.text = seconds.ToString(); // 顯示為整數
+            scaredTimerText.text = "Ghost Scared: " + seconds.ToString(); // 顯示為整數
         }
     }
 
@@ -138,6 +160,7 @@ public class UIManager : MonoBehaviour
 
         scaredTimeRemaining = duration;
         // 立即讓 UI 顯示，並開始倒數
+        isRecovering = false;
         scaredTimerText.gameObject.SetActive(true); 
     }
 
