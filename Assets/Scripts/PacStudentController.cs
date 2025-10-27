@@ -4,34 +4,31 @@
 
     public class PacStudentController : MonoBehaviour
     {
-        [SerializeField]
-        private float moveDuration = 0.3f; 
-        [SerializeField]
-        private AudioClip pacMovingClip;
-        [SerializeField]
-        private AudioClip pacEatClip;
-        [SerializeField] 
-        private AudioClip wallCollisionClip;
-        [SerializeField] 
-        private GameObject wallParticlePrefab;
+        [SerializeField] private float moveDuration = 0.3f; 
+        [SerializeField] private AudioClip pacMovingClip;
+        [SerializeField] private AudioClip pacEatClip;
+        [SerializeField] private AudioClip wallCollisionClip;
+        [SerializeField] private GameObject wallParticlePrefab;
         // Movement
         private bool isMoving = false; 
         private Vector3 targetPosition; 
         private Vector3 currentPosition; 
-        // Input
-        private Vector3 lastInput = Vector3.zero;
-        private Vector3 currentInput = Vector3.zero; 
+        private Vector3 nextInput = Vector3.zero;
+        private Vector3 currentDirection = Vector3.zero;
         private Vector3 lastDirection = Vector3.right;
+        
         // Component references
         private LevelGenerator levelGenerator; 
         private Animator animator;
         private AudioSource audioSource;
         private ParticleSystem dustParticles;
+        
         // Hit wall
         private bool wallHitCooldown = false;
         private float wallHitCooldownTime = 0.3f; 
         private float wallHitTimer = 0f;
         private bool isPlayingWallSound = false;
+        
         // Transporter
         private bool teleporterCooldown = false;
         private const float teleporterCooldownTime = 0.1f;
@@ -61,11 +58,11 @@
         void Update()
         {
             // Gather player input and update lastInput
-            if (Input.GetKeyDown(KeyCode.W)) lastInput = Vector3.up;
-            else if (Input.GetKeyDown(KeyCode.S)) lastInput = Vector3.down;
-            else if (Input.GetKeyDown(KeyCode.A)) lastInput = Vector3.left;
-            else if (Input.GetKeyDown(KeyCode.D)) lastInput = Vector3.right;
-
+            if (Input.GetKeyDown(KeyCode.W)) nextInput = Vector3.up;
+            else if (Input.GetKeyDown(KeyCode.S)) nextInput = Vector3.down;
+            else if (Input.GetKeyDown(KeyCode.A)) nextInput = Vector3.left;
+            else if (Input.GetKeyDown(KeyCode.D)) nextInput = Vector3.right;
+            
             if (wallHitCooldown)
             {
                 wallHitTimer += Time.deltaTime;
@@ -79,33 +76,40 @@
             // Only process movement when not currently moving
             if (!isMoving)
             {
-                Vector3 directionToTry = Vector3.zero;
-
-                if (lastInput != Vector3.zero)
-                    directionToTry = lastInput;
-                else if (currentInput != Vector3.zero)
-                    directionToTry = currentInput;
-
-                if (directionToTry != Vector3.zero)
+                Vector3 chosenDir = Vector3.zero;
+                
+                // Check new input
+                if (nextInput != Vector3.zero && CanMoveInDirection(nextInput))
                 {
-                    if (CanMoveInDirection(directionToTry))
+                    currentDirection = nextInput;
+                    chosenDir = nextInput;
+                    nextInput = Vector3.zero; 
+                }
+                
+                else if (nextInput != Vector3.zero && !CanMoveInDirection(nextInput))
+                {
+                    if (!wallHitCooldown)
                     {
-                        currentInput = directionToTry;
-                        InitiateMovement(directionToTry);
+                        PlayWallCollisionEffect();
+                        wallHitCooldown = true;
                     }
-                    else
-                    {
-                        if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.A) ||
-                            Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.D))
-                        {
-                            if (!wallHitCooldown)
-                            {
-                                PlayWallCollisionEffect();
-                                wallHitCooldown = true;
-                            }
-                        }
-                        ResetMovementStates();
-                    }
+                    nextInput = Vector3.zero; // 清除無效輸入
+                }
+                // 繼續當前方向
+                else if (currentDirection != Vector3.zero && CanMoveInDirection(currentDirection))
+                {
+                    chosenDir = currentDirection;
+                }
+                else
+                {
+                    // 無法移動，停下
+                    ResetMovementStates();
+                    return;
+                }
+            
+                if (chosenDir != Vector3.zero)
+                {
+                    InitiateMovement(chosenDir);
                 }
             }
         }
@@ -162,28 +166,36 @@
         IEnumerator MoveToTarget()
         {
             isMoving = true; 
-            float timeStarted = Time.time;
+            float elapsed = 0f;
         
-            while (true)
+            while (elapsed < moveDuration)
             {
-                if (!isMoving)
-                {
-                    yield break;
-                }
-                
-                float timeSinceStart = Time.time - timeStarted;
-                float fractionOfJourney = Mathf.Min(timeSinceStart / moveDuration, 1.0f);
-            
-                transform.position = Vector3.Lerp(currentPosition, targetPosition, fractionOfJourney);
-
-                if (fractionOfJourney >= 1.0f) break;
-            
+                elapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(elapsed / moveDuration);
+        
+                transform.position = Vector3.Lerp(currentPosition, targetPosition, t);
                 yield return null; 
             }
             
             transform.position = targetPosition;
             currentPosition = targetPosition;
             isMoving = false;
+            
+            if (nextInput != Vector3.zero && CanMoveInDirection(nextInput))
+            {
+                currentDirection = nextInput;
+                nextInput = Vector3.zero;
+                InitiateMovement(currentDirection);
+            }
+            else if (currentDirection != Vector3.zero && CanMoveInDirection(currentDirection))
+            {
+                InitiateMovement(currentDirection);
+            }
+            else
+            {
+                currentDirection = Vector3.zero;
+                ResetMovementStates();
+            }
         }
         
         // Stop all movement effects when blocked
@@ -208,27 +220,21 @@
             {
                 dustParticles.Stop();
             }
-        
-            // Reset input
-            currentInput = Vector3.zero;
         }
         private void PlayWallCollisionEffect()
         {
             if (audioSource != null && wallCollisionClip != null)
             {
-                if (audioSource != null && wallCollisionClip != null)
+                if (audioSource.isPlaying && !isPlayingWallSound)
                 {
-                    if (audioSource.isPlaying && !isPlayingWallSound)
-                    {
-                        audioSource.Stop();
-                    }
-
-                    audioSource.PlayOneShot(wallCollisionClip, 2.0f); 
-        
-                    isPlayingWallSound = true;
-                    
-                    Invoke("ResetWallSoundFlag", wallCollisionClip.length);
+                    audioSource.Stop();
                 }
+
+                audioSource.PlayOneShot(wallCollisionClip, 2.0f); 
+                isPlayingWallSound = true;
+            
+                // 🔧 改用 Coroutine 取代 Invoke，更容易管理
+                StartCoroutine(ResetWallSoundFlagAfterDelay(wallCollisionClip.length));
             }
             
             if (wallParticlePrefab != null)
@@ -236,24 +242,18 @@
                 Instantiate(wallParticlePrefab, transform.position, Quaternion.identity);
             }
         }
-        private void ResetWallSoundFlag()
+        private IEnumerator ResetWallSoundFlagAfterDelay(float delay)
         {
+            yield return new WaitForSeconds(delay);
             isPlayingWallSound = false;
         }
         
         private void OnTriggerEnter2D(Collider2D other)
         {
-            // C1: Teleporters
-            if (other.CompareTag("Teleporter"))
+            if (other.CompareTag("Teleporter") && !teleporterCooldown)
             {
-                if (teleporterCooldown)
-                {
-                    return;
-                }
-                
-                Vector3 newPos = transform.position; 
                 GameObject targetTeleporter = null;
-        
+    
                 if (other.name == "TeleporterLeft")
                 {
                     targetTeleporter = GameObject.Find("TeleporterRight");
@@ -262,27 +262,24 @@
                 {
                     targetTeleporter = GameObject.Find("TeleporterLeft");
                 }
+            
                 if (targetTeleporter != null)
                 {
-                    newPos = targetTeleporter.transform.position;
+                    Vector3 newPos = targetTeleporter.transform.position;
                     newPos.z = transform.position.z;
 
                     transform.position = newPos;
                     currentPosition = newPos;
                     targetPosition = newPos;
-                    
-                    SetTeleporterCooldown();
+                
+                    StartCoroutine(ResetTeleporterCooldownAfterDelay());
                 }
             }
         }
-        private void SetTeleporterCooldown()
+        private IEnumerator ResetTeleporterCooldownAfterDelay()
         {
             teleporterCooldown = true;
-            Invoke("ResetTeleporterCooldown", teleporterCooldownTime); 
-        }
-
-        private void ResetTeleporterCooldown()
-        {
+            yield return new WaitForSeconds(teleporterCooldownTime);
             teleporterCooldown = false;
         }
     }
