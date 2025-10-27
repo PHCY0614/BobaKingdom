@@ -3,7 +3,8 @@
 --- !u!78 &1
 TagManager:
   serializedVersion: 2
-  tags: []
+  tags:
+  - PacStudent
   layers:
   - Default
   - TransparentFX
@@ -43,4 +44,7 @@ TagManager:
     locked: 0
   - name: Pacstudent and Ghost
     uniqueID: 1814065495
+    locked: 0
+  - name: Cherry
+    uniqueID: 2427106909
     locked: 0

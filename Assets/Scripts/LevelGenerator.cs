@@ -58,7 +58,6 @@ public class LevelGenerator : MonoBehaviour
         {
             return false; // X is out of bounds
         }
-        // Y軸: 索引必須 >= 0 且 < 總列數
         if (y < 0 || y >= rows)
         {
             return false; // Y is out of bounds
