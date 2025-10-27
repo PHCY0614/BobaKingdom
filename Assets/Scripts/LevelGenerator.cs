@@ -45,7 +45,6 @@ public class LevelGenerator : MonoBehaviour
         CopyTo(fullMap, _quadrantMap, rows, cols, true, true, mirrorRows);
         
         _levelMap = fullMap;
-        Debug.Log($"Full Map Data Assembled: {fullRows} Rows x {fullCols} Cols.");
     }
     public bool IsWalkable(int x, int y)
     {
@@ -68,7 +67,21 @@ public class LevelGenerator : MonoBehaviour
         return (tileValue == 0 || tileValue == 5 || tileValue == 6);
     }
 
-    
+    void CopyTo(int[,] target, int[,] source, int startY, int startX, bool mirrorX, bool mirrorY, int copyRows)
+    {
+        int cols = source.GetLength(1);
+
+        for (int y = 0; y < copyRows; y++)
+        {
+            for (int x = 0; x < cols; x++)
+            {
+                int srcY = mirrorY ? copyRows - 1 - y : y;
+                int srcX = mirrorX ? cols - 1 - x : x;
+
+                target[startY + y, startX + x] = source[srcY, srcX];
+            }
+        }
+    }
     /*void Start()
     {
         if (manualLevel != null) manualLevel.SetActive(false);
@@ -208,19 +221,4 @@ public class LevelGenerator : MonoBehaviour
 
         return 0;
     }*/
-    void CopyTo(int[,] target, int[,] source, int startY, int startX, bool mirrorX, bool mirrorY, int copyRows)
-    {
-        int cols = source.GetLength(1);
-
-        for (int y = 0; y < copyRows; y++)
-        {
-            for (int x = 0; x < cols; x++)
-            {
-                int srcY = mirrorY ? copyRows - 1 - y : y;
-                int srcX = mirrorX ? cols - 1 - x : x;
-
-                target[startY + y, startX + x] = source[srcY, srcX];
-            }
-        }
-    }
 }    
