@@ -20,8 +20,15 @@ public class UIManager : MonoBehaviour
     // Ghost
     private bool isRecovering = false;
     private GhostManager ghostManager;
-    
-    
+    private AudioController audioController;
+
+    void Awake()
+    {
+        ghostManager = FindFirstObjectByType<GhostManager>();
+        audioController = FindFirstObjectByType<AudioController>();
+        if (ghostManager == null) Debug.LogWarning("GhostManager not found. Ghost states cannot be changed yet.");
+        if (audioController == null) Debug.LogError("AudioController not found!");
+    }
     void Start()
     {
         UpdateScoreDisplay();
@@ -48,26 +55,26 @@ public class UIManager : MonoBehaviour
             {
                 isRecovering = true;
                 // 呼叫 GhostManager 進入 Recovering 狀態
-                if (ghostManager != null)
-                {
-                    // ghostManager.SetGhostState(GhostState.Recovering); 
-                    Debug.Log("SCARED Timer: Entering Recovering State.");
-                }
-                // 💡 未來：在這裡改變音樂/動畫為閃爍狀態
             }
 
-            if (scaredTimeRemaining <= 0f)
+            else if (scaredTimeRemaining <= 0f && isRecovering) // 計時結束，狀態重置
             {
                 scaredTimeRemaining = 0f;
-                StopScaredTimer(); 
-                // *** (未來 GhostManager 會在這裡被通知切換狀態)
+                isRecovering = false;
+
+                // --- ADDED: 步驟五 (恢復正常音樂) ---
+                if (audioController != null)
+                {
+                    // Set the Ghosts back to their Normal states and change BGM
+                    audioController.PlayNormalMusic();
+                }
+
+                // 恢復幽靈狀態（待實作）
                 if (ghostManager != null)
                 {
-                    // ghostManager.SetGhostState(GhostState.Normal); 
-                    Debug.Log("SCARED Timer: Timer expired, setting Ghosts to Normal.");
+                    // ghostManager.ChangeStateToNormal(); 
                 }
             }
-
             UpdateScaredTimerDisplay(scaredTimeRemaining);
         }
     }
@@ -85,14 +92,6 @@ public class UIManager : MonoBehaviour
     public void StartScene()
     {
         SceneManager.LoadScene("StartScene");
-    }
-    
-    public void QuitGame()
-    {
-        // Purpose: Exit the game (useful for the main menu, though optional)
-        Debug.Log("Quitting Game...");
-        Application.Quit();
-        // NOTE: Application.Quit() only works in a built game (not in Unity Editor).
     }
 
     public void AddScore(int points)
@@ -156,12 +155,25 @@ public class UIManager : MonoBehaviour
     // 新增：當 PacStudent 吃下大力丸時，GhostManager 會呼叫此方法
     public void StartScaredTimer(float duration)
     {
+        
         if (scaredTimerText == null) return;
 
         scaredTimeRemaining = duration;
         // 立即讓 UI 顯示，並開始倒數
         isRecovering = false;
         scaredTimerText.gameObject.SetActive(true); 
+        
+        if (audioController != null)
+        {
+            // Change the background music to the Scared state
+            audioController.PlayScaredMusic(); 
+        }
+    
+        // 由於 GhostManager 尚未實作，我們先留下這個區塊作為待辦事項
+        if (ghostManager != null)
+        {
+            // Change the Ghost animator state to "Scared"
+        }
     }
 
     // 新增：當計時結束或幽靈被吃掉時，GhostManager 會呼叫此方法

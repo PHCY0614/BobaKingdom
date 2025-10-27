@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 3603598507811515709}
   - component: {fileID: 1409659326439594194}
   - component: {fileID: 7563074606973676078}
+  - component: {fileID: 4170457772693061313}
   m_Layer: 0
   m_Name: Ghost - Peach
   m_TagString: Untagged
@@ -207,3 +208,15 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+--- !u!114 &4170457772693061313
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8789628162791505563}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6932cf0c922b1ee4e82974bde6d8f788, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
