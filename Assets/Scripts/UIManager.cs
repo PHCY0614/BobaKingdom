@@ -5,7 +5,6 @@ using TMPro;
 
 public class UIManager : MonoBehaviour
 {
-    public static UIManager Instance { get; private set; }
     public TextMeshProUGUI scoreText;
     public TextMeshProUGUI timerText;
     public TextMeshProUGUI scaredTimerText;
@@ -36,62 +35,11 @@ public class UIManager : MonoBehaviour
     
     void Awake()
     {
-        // === 2. 實作單例模式 (確保只有一個實例) ===
-        if (Instance != null && Instance != this)
-        {
-            // 如果 Instance 已存在，銷毀新的實例 (StartScreen 或 Level1 中的次要實例)
-            Destroy(gameObject);
-            return;
-        }
-        
-        Instance = this;
-        DontDestroyOnLoad(gameObject); 
-        
-        SceneManager.sceneLoaded -= OnSceneLoaded; 
-        SceneManager.sceneLoaded += OnSceneLoaded;
-    }
-    void OnDestroy()
-    {
-        // 移除場景載入事件，防止內存洩漏
-        SceneManager.sceneLoaded -= OnSceneLoaded;
-        
-        if (Instance == this)
-        {
-            Instance = null;
-        }
+        pacStudentController = FindFirstObjectByType<PacStudentController>();
+        ghostManager = FindFirstObjectByType<GhostManager>();
+        audioController = FindFirstObjectByType<AudioController>();
     }
     
-    // === 4. 場景載入回調函數 (Callback) - 設置引用和重置狀態 ===
-    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-    {
-        // 判斷是否為 Level 場景
-        if (scene.name == "Level1Scene" || scene.name == "InnovationScene") 
-        {
-            // 在 Level 載入時，查找並設定引用
-            pacStudentController = FindFirstObjectByType<PacStudentController>();
-            ghostManager = FindFirstObjectByType<GhostManager>();
-            audioController = FindFirstObjectByType<AudioController>();
-            if (ghostManager == null) Debug.LogError("Level Loaded, but GhostManager not found!");
-            if (audioController == null) Debug.LogError("Level Loaded, but AudioController not found!");
-            
-            // 重新初始化 Level UI 顯示
-            currentLives = initialLives; 
-            UpdateLivesDisplay();
-            isTiming = true; // 恢復計時
-            
-            Debug.Log("UIManager successfully initialized Level references.");
-        }
-        else
-        {
-            // 切換到 StartScene 或其他非 Level 場景時
-            // 清除 Level 專屬引用，避免殘留
-            pacStudentController = null;
-            ghostManager = null;
-            audioController = null;
-            isTiming = false; // 停止計時
-            Debug.Log("UIManager cleared Level references.");
-        }
-    }
     void Start()
     {
         UpdateScoreDisplay();

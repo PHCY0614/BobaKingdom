@@ -18,11 +18,7 @@ public class CherryCollision : MonoBehaviour
             Destroy(gameObject);
         }
         
-        uiManager = UIManager.Instance;
-        if (uiManager == null)
-        {
-            Debug.LogError("UIManager Instance not found! Score will not be updated.");
-        }
+        uiManager = FindObjectOfType<UIManager>();
     }
     
     // 額外功能：處理碰撞 (假設 Cherry 有一個 Trigger Collider)

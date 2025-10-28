@@ -25,7 +25,8 @@ public class GhostController : MonoBehaviour
 
     void Start()
     {
-        uiManager = UIManager.Instance;
+        uiManager = FindObjectOfType<UIManager>();
+        
     }
     public void SetState(GhostState newState)
     {

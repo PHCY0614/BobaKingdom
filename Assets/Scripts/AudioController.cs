@@ -4,6 +4,7 @@ using UnityEngine;
 
 public class AudioController : MonoBehaviour
 {
+    private UIManager uiManager;
     public AudioSource audioSource;
     public AudioClip bgmIntro;
     public AudioClip bgmGhostNormal;
@@ -96,7 +97,7 @@ public class AudioController : MonoBehaviour
         float waitTime = bgmGhostDead != null ? Mathf.Min(bgmGhostDead.length, 3.0f) : 3.0f;
         yield return new WaitForSecondsRealtime(waitTime);
         
-        UIManager uiManager = UIManager.Instance;
+        uiManager = FindObjectOfType<UIManager>();
         if (uiManager != null)
         {
             float scaredTime = uiManager.GetScaredTimeRemaining();

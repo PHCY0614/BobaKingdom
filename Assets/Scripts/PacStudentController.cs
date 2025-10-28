@@ -64,8 +64,7 @@
             }
 
             // UIManager 
-            uiManager = UIManager.Instance;
-            if (uiManager == null) Debug.LogError("UIManager Instance not found!");    
+            uiManager = FindObjectOfType<UIManager>();
             // Store original position
             startPosition = transform.position;
             currentPosition = startPosition;
