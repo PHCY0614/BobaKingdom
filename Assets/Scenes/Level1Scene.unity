@@ -47139,7 +47139,7 @@ Animator:
   m_GameObject: {fileID: 1229071223}
   m_Enabled: 1
   m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 9100000, guid: e2d447bc09ad7f542ad160114e70de0d, type: 2}
+  m_Controller: {fileID: 9100000, guid: e4b688d5e6eba954ba3a3e06d4e61eb5, type: 2}
   m_CullingMode: 0
   m_UpdateMode: 0
   m_ApplyRootMotion: 0
@@ -55985,6 +55985,7 @@ MonoBehaviour:
   audioSource: {fileID: 1881982438}
   bgmIntro: {fileID: 8300000, guid: 2ef3ba4775d6a4d478284b5290751d10, type: 3}
   bgmGhostNormal: {fileID: 8300000, guid: c9f9673f11a18f948be875292992de55, type: 3}
+  bgmGhostScared: {fileID: 8300000, guid: 72cd11d0c74e507479bdc38f36e588cc, type: 3}
 --- !u!4 &1884278928 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 360145939141906139, guid: 25e4f42f04b608e4ea0cf1084f551886, type: 3}
@@ -62296,7 +62297,7 @@ PrefabInstance:
     - target: {fileID: 584798757776573337, guid: 2d7eb497e6f64654ba51bdeddb733462, type: 3}
       propertyPath: m_Controller
       value: 
-      objectReference: {fileID: 9100000, guid: b1816b1a6d0ee124e94da8c1b44b8857, type: 2}
+      objectReference: {fileID: 9100000, guid: f3a02fc1b51459643805b97acc0e1021, type: 2}
     - target: {fileID: 4095326324052513391, guid: 2d7eb497e6f64654ba51bdeddb733462, type: 3}
       propertyPath: m_LocalPosition.x
       value: 15
@@ -62364,7 +62365,7 @@ PrefabInstance:
     - target: {fileID: 1123487637457504041, guid: addfe72f8ce21244fa73ba747c6e3595, type: 3}
       propertyPath: m_Controller
       value: 
-      objectReference: {fileID: 9100000, guid: 7d2cd1576f4a6b24c90fee044fe38353, type: 2}
+      objectReference: {fileID: 9100000, guid: 45b49aea0a1a86e4fb21d9f0570cb0dc, type: 2}
     - target: {fileID: 3886906930057903017, guid: addfe72f8ce21244fa73ba747c6e3595, type: 3}
       propertyPath: m_Name
       value: Ghost - Lychee

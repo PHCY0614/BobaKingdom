@@ -55,24 +55,28 @@ public class UIManager : MonoBehaviour
             {
                 isRecovering = true;
                 // 呼叫 GhostManager 進入 Recovering 狀態
-            }
-
-            else if (scaredTimeRemaining <= 0f && isRecovering) // 計時結束，狀態重置
-            {
-                scaredTimeRemaining = 0f;
-                isRecovering = false;
-
-                // --- ADDED: 步驟五 (恢復正常音樂) ---
-                if (audioController != null)
-                {
-                    // Set the Ghosts back to their Normal states and change BGM
-                    audioController.PlayNormalMusic();
-                }
-
-                // 恢復幽靈狀態（待實作）
                 if (ghostManager != null)
                 {
-                    // ghostManager.ChangeStateToNormal(); 
+                    ghostManager.ChangeStateToRecovering();
+                }
+            }
+
+            if (scaredTimeRemaining <= 0f)
+            {
+                // 將時間強制設為 0f
+                scaredTimeRemaining = 0f;
+                isRecovering = false; // 重置 Recovering 旗標
+            
+                // 呼叫 GhostManager 恢復 Normal 狀態
+                if (ghostManager != null)
+                {
+                    ghostManager.ChangeStateToNormal();
+                }
+            
+                // 恢復 Normal BGM (這是之前步驟的成果)
+                if (audioController != null)
+                {
+                    audioController.PlayNormalMusic();
                 }
             }
             UpdateScaredTimerDisplay(scaredTimeRemaining);
@@ -163,17 +167,18 @@ public class UIManager : MonoBehaviour
         isRecovering = false;
         scaredTimerText.gameObject.SetActive(true); 
         
+        // --- 新增：啟動嚇跑狀態 (10 秒開始) ---
         if (audioController != null)
         {
-            // Change the background music to the Scared state
-            audioController.PlayScaredMusic(); 
+            audioController.PlayScaredMusic(); // 播放嚇跑音樂
         }
-    
-        // 由於 GhostManager 尚未實作，我們先留下這個區塊作為待辦事項
+
         if (ghostManager != null)
         {
-            // Change the Ghost animator state to "Scared"
+            ghostManager.ChangeStateToScared(); // 呼叫幽靈切換到 Scared 狀態
         }
+        
+        UpdateScaredTimerDisplay(duration);
     }
 
     // 新增：當計時結束或幽靈被吃掉時，GhostManager 會呼叫此方法
