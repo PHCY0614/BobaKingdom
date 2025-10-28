@@ -64,7 +64,7 @@
             }
 
             // UIManager 
-            uiManager = FindObjectOfType<UIManager>();
+            uiManager = FindFirstObjectByType<UIManager>();
             // Store original position
             startPosition = transform.position;
             currentPosition = startPosition;
@@ -435,23 +435,12 @@
                 animator.SetTrigger("Death"); 
                 animator.SetBool("IsMoving", false); 
             }
-
-            /*// 2. 產生死亡粒子效果
-            if (deathParticlePrefab != null)
-            {
-                // 在 PacStudent 的位置產生粒子效果
-                // 因為 Time.timeScale=0，所以這個 Instantiation 必須立即發生。
-                // 粒子系統的 StopAction 設為 Destroy 才能在播放結束後移除自身。
-                Instantiate(deathParticlePrefab, transform.position, Quaternion.identity);
-            }*/
         }
 
         public void PlayDeathParticle()
         {
-            // deathParticlePrefab 在 PacStudentController 內部，所以可以存取
             if (deathParticlePrefab != null)
             {
-                // 在 PacStudent 的位置產生粒子效果
                 Instantiate(deathParticlePrefab, transform.position, Quaternion.identity);
             }
         }

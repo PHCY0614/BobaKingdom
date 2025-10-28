@@ -6,16 +6,11 @@ public class PowerPillController : MonoBehaviour
 {
     private const int POWER_PILL_SCORE = 50;
     private const float SCARED_DURATION = 10.0f; 
-    private const float RECOVERING_THRESHOLD = 3.0f; 
-    
     private UIManager uiManager;
-    private GhostManager ghostManager; 
 
     void Start()
     {
-        uiManager = FindObjectOfType<UIManager>();
-        ghostManager = FindFirstObjectByType<GhostManager>();
-        if (ghostManager == null) Debug.LogWarning("GhostManager not found! Ghost states cannot be changed yet.");
+        uiManager = FindFirstObjectByType<UIManager>();
     }
     
     void OnTriggerEnter2D(Collider2D other)

@@ -9,7 +9,7 @@ public class PelletController : MonoBehaviour
 
     void Start()
     {
-        uiManager = FindObjectOfType<UIManager>();
+        uiManager = FindFirstObjectByType<UIManager>();
     }
     
     private void OnTriggerEnter2D(Collider2D other)

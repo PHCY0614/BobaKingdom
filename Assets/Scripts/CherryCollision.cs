@@ -10,21 +10,12 @@ public class CherryCollision : MonoBehaviour
 
     void Start()
     {
-        // 取得 CherryController 的引用
         controller = FindFirstObjectByType<CherryController>();
-        if (controller == null)
-        {
-            Debug.LogError("CherryController not found in scene!");
-            Destroy(gameObject);
-        }
-        
-        uiManager = FindObjectOfType<UIManager>();
+        uiManager = FindFirstObjectByType<UIManager>();
     }
     
-    // 額外功能：處理碰撞 (假設 Cherry 有一個 Trigger Collider)
     void OnTriggerEnter2D(Collider2D other)
     {
-        // 假設 PacStudent 有一個 Tag 叫做 "PacStudent"
         if (other.CompareTag("PacStudent"))
         {
             if (uiManager != null)
