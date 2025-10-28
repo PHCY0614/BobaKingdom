@@ -39,7 +39,8 @@
         private UIManager uiManager;
         [SerializeField] private AudioClip pacDeathClip; 
         private bool isDead = false;
-        
+
+
         void Start()
         {    
 
@@ -316,10 +317,36 @@
                     {
                         // 碰到 Scared/Recovering 幽靈：吃掉幽靈 (稍後實作)
                         Debug.Log("PacStudent ate the ghost! (Logic TBD)");
-                        // TODO: 實作吃幽靈邏輯 (Score, Ghost Respawn)
+                        HandleGhostEaten(ghost);
                     }
                 }
             }
+        }
+        private void HandleGhostEaten(GhostController ghost)
+        {
+            if (ghost.currentState == GhostState.Dead) return;
+            
+            // 2. PacStudentController 只處理分數和音效
+            if (uiManager != null)
+            {
+                const int GHOST_EAT_SCORE = 300;
+                uiManager.AddScore(GHOST_EAT_SCORE);
+            }
+            
+            // 4. 播放吃幽靈音效
+            if (audioSource != null && pacEatClip != null)
+            {
+                audioSource.PlayOneShot(pacEatClip, 0.5f);
+            }
+
+            // ✨ 5. 切換背景音樂到 Dead 狀態
+            if (uiManager != null && uiManager.AudioController != null) 
+            {
+                uiManager.AudioController.PlayDeadMusic(); // ✅ 現在可以透過 Public Property 存取
+            }
+    
+            // 5. 讓幽靈自己處理死亡、3秒計時和復活邏輯
+            ghost.HandleEaten(uiManager);
         }
         private IEnumerator ResetTeleporterCooldownAfterDelay()
         {

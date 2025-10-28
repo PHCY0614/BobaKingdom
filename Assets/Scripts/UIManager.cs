@@ -23,7 +23,10 @@ public class UIManager : MonoBehaviour
     private bool isRecovering = false;
     private GhostManager ghostManager;
     private AudioController audioController;
-    
+    public AudioController AudioController 
+    {
+        get { return audioController; }
+    }
     //Lives
     private PacStudentController pacStudentController;
     [SerializeField] private int initialLives = 3;
@@ -327,5 +330,10 @@ public class UIManager : MonoBehaviour
                 lifeIcons[i].SetActive(i < currentLives);
             }
         }
+    }
+    
+    public float GetScaredTimeRemaining()
+    {
+        return scaredTimeRemaining;
     }
 }

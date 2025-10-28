@@ -8,7 +8,8 @@ public class AudioController : MonoBehaviour
     public AudioClip bgmIntro;
     public AudioClip bgmGhostNormal;
     public AudioClip bgmGhostScared;
-    
+    public AudioClip bgmGhostDead;
+    private Coroutine deadMusicCoroutine; // 追蹤當前的 Dead Music 協程
     // Start is called before the first frame update
     void Start()
     {
@@ -30,15 +31,23 @@ public class AudioController : MonoBehaviour
         audioSource.Play();
     }
     
-    public void PlayScaredMusic(AudioClip scaredClip)
+    public void PlayScaredMusic()
     {
-        if (audioSource != null && scaredClip != null)
+        if (audioSource != null && bgmGhostScared != null)
         {
-            // 覆蓋當前播放的音樂
-            audioSource.clip = scaredClip;
-            audioSource.loop = true; 
-            audioSource.Play();
-            Debug.Log("AudioController: Switched to Scared BGM.");
+            // 🔧 如果正在播放 Dead Music，取消協程
+            if (deadMusicCoroutine != null)
+            {
+                StopCoroutine(deadMusicCoroutine);
+                deadMusicCoroutine = null;
+            }
+            if (audioSource.clip != bgmGhostScared)
+            {
+                audioSource.clip = bgmGhostScared;
+                audioSource.loop = true;
+                audioSource.Play();
+                Debug.Log("AudioController: Switched to Scared BGM.");
+            }
         }
     }
     
@@ -46,27 +55,74 @@ public class AudioController : MonoBehaviour
     {
         if (audioSource != null && audioSource.clip != bgmGhostNormal)
         {
-            // 切換回 Normal BGM
+            // 🔧 如果正在播放 Dead Music，取消協程
+            if (deadMusicCoroutine != null)
+            {
+                StopCoroutine(deadMusicCoroutine);
+                deadMusicCoroutine = null;
+            }
+            
             audioSource.clip = bgmGhostNormal;
             audioSource.loop = true;
             audioSource.Play();
             Debug.Log("AudioController: Switched back to Normal BGM.");
         }
     }
-    public void PlayScaredMusic()
+    public void PlayDeadMusic()
     {
-        if (audioSource != null && bgmGhostScared != null)
+        if (audioSource != null && bgmGhostDead != null)
         {
-            // 檢查是否已經在播放這個音樂，避免重複切換
-            if (audioSource.clip != bgmGhostScared)
+            // 停止當前音樂
+            audioSource.Stop();
+            
+            // 播放死亡音樂 (通常是單次播放)
+            audioSource.clip = bgmGhostDead;
+            audioSource.loop = false; // Dead BGM 不循環播放
+            audioSource.Play();
+            Debug.Log("AudioController: Switched to Dead BGM.");
+            
+            if (deadMusicCoroutine != null)
             {
-                // 覆蓋當前播放的音樂
-                audioSource.clip = bgmGhostScared;
-                audioSource.loop = true; // BGM 通常是循環的
-                audioSource.Play();
-                Debug.Log("AudioController: Switched to Scared BGM.");
+                StopCoroutine(deadMusicCoroutine);
             }
+            deadMusicCoroutine = StartCoroutine(WaitAndSwitchBackBGM());
         }
     }
-    
-}
+
+    // ✨ 新增協程：等待後根據 GhostManager 的狀態切回
+    private IEnumerator WaitAndSwitchBackBGM()
+    {
+        // 等待 Dead BGM 播放完畢（或 3 秒，取較短者）
+        float waitTime = bgmGhostDead != null ? Mathf.Min(bgmGhostDead.length, 3.0f) : 3.0f;
+        yield return new WaitForSecondsRealtime(waitTime);
+        
+        UIManager uiManager = UIManager.Instance;
+        if (uiManager != null)
+        {
+            float scaredTime = uiManager.GetScaredTimeRemaining();
+            
+            // 🔧 更精確的狀態判斷
+            if (scaredTime > 3.0f)
+            {
+                // 還有超過 3 秒 → Scared
+                PlayScaredMusic();
+            }
+            else if (scaredTime > 0f)
+            {
+                // 0~3 秒 → Recovering (仍使用 Scared 音樂)
+                PlayScaredMusic();
+            }
+            else
+            {
+                // 時間結束 → Normal
+                PlayNormalMusic();
+            }
+        }
+        else
+        {
+            PlayNormalMusic();
+        }
+        
+        deadMusicCoroutine = null;
+        }
+    }
