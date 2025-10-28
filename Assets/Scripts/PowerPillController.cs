@@ -13,10 +13,8 @@ public class PowerPillController : MonoBehaviour
 
     void Start()
     {
-        uiManager = FindFirstObjectByType<UIManager>();
+        uiManager = UIManager.Instance;
         ghostManager = FindFirstObjectByType<GhostManager>();
-
-        if (uiManager == null) Debug.LogError("UIManager not found!");
         if (ghostManager == null) Debug.LogWarning("GhostManager not found! Ghost states cannot be changed yet.");
     }
     

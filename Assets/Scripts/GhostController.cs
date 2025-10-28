@@ -10,7 +10,7 @@ public enum GhostState
 public class GhostController : MonoBehaviour
 {
     private Animator animator;
-    private GhostState currentState = GhostState.Normal;
+    public GhostState currentState = GhostState.Normal;
     // 確保你在 Unity Inspector 中為每個幽靈物件添加了 Animator 元件
 
     void Awake()

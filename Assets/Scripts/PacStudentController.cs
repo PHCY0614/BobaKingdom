@@ -9,6 +9,7 @@
         [SerializeField] private AudioClip pacEatClip;
         [SerializeField] private AudioClip wallCollisionClip;
         [SerializeField] private GameObject wallParticlePrefab;
+        [SerializeField] private GameObject deathParticlePrefab;
         // Movement
         private bool isMoving = false; 
         private Vector3 targetPosition; 
@@ -33,8 +34,15 @@
         private bool teleporterCooldown = false;
         private const float teleporterCooldownTime = 0.1f;
         
+        // Game State
+        private Vector3 startPosition; // 儲存 PacStudent 的起始位置
+        private UIManager uiManager;
+        [SerializeField] private AudioClip pacDeathClip; 
+        private bool isDead = false;
+        
         void Start()
-        { 
+        {    
+
             levelGenerator = FindFirstObjectByType<LevelGenerator>();
             animator = GetComponent<Animator>();
             dustParticles = GetComponentInChildren<ParticleSystem>();
@@ -53,10 +61,20 @@
             {
                 dustParticles.Stop();
             }
+
+            // UIManager 引用 (新增)
+            uiManager = UIManager.Instance;
+            if (uiManager == null) Debug.LogError("UIManager Instance not found!");    
+            // 儲存起始位置 (新增)
+            startPosition = transform.position;
+            currentPosition = startPosition;
+            targetPosition = startPosition;
         }
 
         void Update()
         {
+            if (isDead) return;
+            
             // Gather player input and update lastInput
             if (Input.GetKeyDown(KeyCode.W)) nextInput = Vector3.up;
             else if (Input.GetKeyDown(KeyCode.S)) nextInput = Vector3.down;
@@ -278,7 +296,28 @@
             {
                 if (audioSource != null && pacEatClip != null)
                 {
-                    audioSource.PlayOneShot(pacEatClip);
+                    audioSource.PlayOneShot(pacEatClip, 0.5f);
+                }
+            }
+            else if (other.CompareTag("Ghost"))
+            {
+                // 取得幽靈控制器
+                GhostController ghost = other.GetComponent<GhostController>();
+
+                if (ghost != null)
+                {
+                    // 檢查幽靈的狀態 - 修正點：移除 GhostController.
+                    if (ghost.currentState == GhostState.Normal)
+                    {
+                        // 碰到 Normal 幽靈：PacStudent 死亡
+                        HandleDeath();
+                    }
+                    else if (ghost.currentState == GhostState.Scared || ghost.currentState == GhostState.Recovering)
+                    {
+                        // 碰到 Scared/Recovering 幽靈：吃掉幽靈 (稍後實作)
+                        Debug.Log("PacStudent ate the ghost! (Logic TBD)");
+                        // TODO: 實作吃幽靈邏輯 (Score, Ghost Respawn)
+                    }
                 }
             }
         }
@@ -288,6 +327,116 @@
             yield return new WaitForSeconds(teleporterCooldownTime);
             teleporterCooldown = false;
         }
+
+        public void ResetPosition()
+        {
+            // 重置位置
+            transform.position = startPosition;
+            currentPosition = startPosition;
+            targetPosition = startPosition;
+
+            // 重置移動狀態
+            isMoving = false;
+            currentDirection = Vector3.zero;
+            lastDirection = Vector3.right;
+            nextInput = Vector3.zero;
+
+            // 重置死亡狀態
+            isDead = false;
+
+            // 重置動畫狀態為 Idle
+            if (animator != null)
+            {
+                animator.SetBool("IsMoving", false);
+                // 確保死亡 Trigger 被清空
+                animator.ResetTrigger("Death"); 
+            }
+    
+            // 停止所有音效
+            if (audioSource != null && audioSource.isPlaying)
+            {
+                audioSource.Stop();
+            }
+    
+            // 啟用 Collider (防止在死亡動畫中被重複判定)
+            Collider2D myCollider = GetComponent<Collider2D>();
+            if (myCollider != null)
+            {
+                myCollider.enabled = true;
+            }
+
+            Debug.Log("PacStudent Reset to Start Position.");
+        }
+        private void HandleDeath()
+        {
+            if (isDead) return; // 避免重複死亡
+            isDead = true;
+    
+            // 1. 立即停止所有 PacStudent 的移動協程
+            StopAllCoroutines(); 
+            isMoving = false;
+            
+            // 禁用 Collider 和移動
+            Collider2D myCollider = GetComponent<Collider2D>();
+            // 禁用輸入和移動邏輯
+            if (myCollider != null)
+            {
+                myCollider.enabled = false;
+            }
+            // 播放死亡音效
+            if (audioSource != null && pacDeathClip != null)
+            {
+                audioSource.PlayOneShot(pacDeathClip);
+            }
+    
+            // 扣除生命值並觸發重置流程
+            if (uiManager != null)
+            {
+                uiManager.LoseLife();
+            }
+        }
+        public void PlayDeathEffect()
+        {
+            // 播放死亡音效 
+            if (audioSource != null && pacDeathClip != null)
+            {
+                // 如果移動音效還在播放，先停止
+                if (audioSource.isPlaying)
+                {
+                    audioSource.Stop();
+                }
+                audioSource.PlayOneShot(pacDeathClip);
+            }
+
+            // 1. 播放死亡動畫 (使用之前在 Animator 中設定的 Trigger)
+            if (animator != null) 
+            {
+                // "Death" 必須與你在 Animator 中設定的 Trigger 名稱完全一致
+                animator.SetTrigger("Death"); 
+                // 確保 PacStudent 的動畫狀態機立即停止移動動畫
+                animator.SetBool("IsMoving", false); 
+            }
+
+            /*// 2. 產生死亡粒子效果
+            if (deathParticlePrefab != null)
+            {
+                // 在 PacStudent 的位置產生粒子效果
+                // 因為 Time.timeScale=0，所以這個 Instantiation 必須立即發生。
+                // 粒子系統的 StopAction 設為 Destroy 才能在播放結束後移除自身。
+                Instantiate(deathParticlePrefab, transform.position, Quaternion.identity);
+            }*/
+        }
+
+        public void PlayDeathParticle()
+        {
+            // deathParticlePrefab 在 PacStudentController 內部，所以可以存取
+            if (deathParticlePrefab != null)
+            {
+                // 在 PacStudent 的位置產生粒子效果
+                Instantiate(deathParticlePrefab, transform.position, Quaternion.identity);
+            }
+        }
     }
 
 
+           

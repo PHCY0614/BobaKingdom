@@ -9,7 +9,7 @@ public class PelletController : MonoBehaviour
 
     void Start()
     {
-        uiManager = FindFirstObjectByType<UIManager>();
+        uiManager = UIManager.Instance;
         if (uiManager == null)
         {
             Debug.LogError("UIManager not found in scene! Score will not be updated.");
