@@ -35,7 +35,7 @@
         private const float teleporterCooldownTime = 0.1f;
         
         // Game State
-        private Vector3 startPosition; // 儲存 PacStudent 的起始位置
+        private Vector3 startPosition; 
         private UIManager uiManager;
         [SerializeField] private AudioClip pacDeathClip; 
         private bool isDead = false;
@@ -63,10 +63,10 @@
                 dustParticles.Stop();
             }
 
-            // UIManager 引用 (新增)
+            // UIManager 
             uiManager = UIManager.Instance;
             if (uiManager == null) Debug.LogError("UIManager Instance not found!");    
-            // 儲存起始位置 (新增)
+            // Store original position
             startPosition = transform.position;
             currentPosition = startPosition;
             targetPosition = startPosition;
@@ -112,16 +112,16 @@
                         PlayWallCollisionEffect();
                         wallHitCooldown = true;
                     }
-                    nextInput = Vector3.zero; // 清除無效輸入
+                    nextInput = Vector3.zero; 
                 }
-                // 繼續當前方向
+                // keep current direction
                 else if (currentDirection != Vector3.zero && CanMoveInDirection(currentDirection))
                 {
                     chosenDir = currentDirection;
                 }
                 else
                 {
-                    // 無法移動，停下
+                    // cant move then stop
                     ResetMovementStates();
                     return;
                 }
@@ -302,21 +302,19 @@
             }
             else if (other.CompareTag("Ghost"))
             {
-                // 取得幽靈控制器
                 GhostController ghost = other.GetComponent<GhostController>();
 
                 if (ghost != null)
                 {
-                    // 檢查幽靈的狀態 - 修正點：移除 GhostController.
                     if (ghost.currentState == GhostState.Normal)
                     {
-                        // 碰到 Normal 幽靈：PacStudent 死亡
+                        // Touch normal ghost：PacStudent dead
                         HandleDeath();
                     }
                     else if (ghost.currentState == GhostState.Scared || ghost.currentState == GhostState.Recovering)
                     {
-                        // 碰到 Scared/Recovering 幽靈：吃掉幽靈 (稍後實作)
-                        Debug.Log("PacStudent ate the ghost! (Logic TBD)");
+                        // touch Scared/Recovering ghost: eat ghost (TBC)
+                        Debug.Log("PacStudent ate the ghost! (Logic TBC)");
                         HandleGhostEaten(ghost);
                     }
                 }
@@ -326,26 +324,26 @@
         {
             if (ghost.currentState == GhostState.Dead) return;
             
-            // 2. PacStudentController 只處理分數和音效
+            // 2. PacStudentController 
             if (uiManager != null)
             {
                 const int GHOST_EAT_SCORE = 300;
                 uiManager.AddScore(GHOST_EAT_SCORE);
             }
             
-            // 4. 播放吃幽靈音效
+            // 3. Eat sound
             if (audioSource != null && pacEatClip != null)
             {
                 audioSource.PlayOneShot(pacEatClip, 0.5f);
             }
 
-            // ✨ 5. 切換背景音樂到 Dead 狀態
+            // 4. bgm to Dead 
             if (uiManager != null && uiManager.AudioController != null) 
             {
-                uiManager.AudioController.PlayDeadMusic(); // ✅ 現在可以透過 Public Property 存取
+                uiManager.AudioController.PlayDeadMusic();
             }
     
-            // 5. 讓幽靈自己處理死亡、3秒計時和復活邏輯
+            // 5. ghost handle its own death
             ghost.HandleEaten(uiManager);
         }
         private IEnumerator ResetTeleporterCooldownAfterDelay()
@@ -357,35 +355,34 @@
 
         public void ResetPosition()
         {
-            // 重置位置
+            // reset position
             transform.position = startPosition;
             currentPosition = startPosition;
             targetPosition = startPosition;
 
-            // 重置移動狀態
+            // reset moving state
             isMoving = false;
             currentDirection = Vector3.zero;
             lastDirection = Vector3.right;
             nextInput = Vector3.zero;
 
-            // 重置死亡狀態
+            // reset death state
             isDead = false;
 
-            // 重置動畫狀態為 Idle
+            // rest to Idle
             if (animator != null)
             {
                 animator.SetBool("IsMoving", false);
-                // 確保死亡 Trigger 被清空
+                // make sure Trigger is reset when dead
                 animator.ResetTrigger("Death"); 
             }
     
-            // 停止所有音效
+            // stop all audio
             if (audioSource != null && audioSource.isPlaying)
             {
                 audioSource.Stop();
             }
-    
-            // 啟用 Collider (防止在死亡動畫中被重複判定)
+            
             Collider2D myCollider = GetComponent<Collider2D>();
             if (myCollider != null)
             {
@@ -396,27 +393,26 @@
         }
         private void HandleDeath()
         {
-            if (isDead) return; // 避免重複死亡
+            if (isDead) return; 
             isDead = true;
     
-            // 1. 立即停止所有 PacStudent 的移動協程
+            // 1. stop PacStudent moving
             StopAllCoroutines(); 
             isMoving = false;
             
-            // 禁用 Collider 和移動
+            // stop Collider and moving
             Collider2D myCollider = GetComponent<Collider2D>();
-            // 禁用輸入和移動邏輯
             if (myCollider != null)
             {
                 myCollider.enabled = false;
             }
-            // 播放死亡音效
+            // play dead audio
             if (audioSource != null && pacDeathClip != null)
             {
                 audioSource.PlayOneShot(pacDeathClip);
             }
     
-            // 扣除生命值並觸發重置流程
+            // deduct life
             if (uiManager != null)
             {
                 uiManager.LoseLife();
@@ -424,10 +420,9 @@
         }
         public void PlayDeathEffect()
         {
-            // 播放死亡音效 
+            // play dead audio
             if (audioSource != null && pacDeathClip != null)
             {
-                // 如果移動音效還在播放，先停止
                 if (audioSource.isPlaying)
                 {
                     audioSource.Stop();
@@ -435,12 +430,10 @@
                 audioSource.PlayOneShot(pacDeathClip);
             }
 
-            // 1. 播放死亡動畫 (使用之前在 Animator 中設定的 Trigger)
+            // 1. play dead animator
             if (animator != null) 
             {
-                // "Death" 必須與你在 Animator 中設定的 Trigger 名稱完全一致
                 animator.SetTrigger("Death"); 
-                // 確保 PacStudent 的動畫狀態機立即停止移動動畫
                 animator.SetBool("IsMoving", false); 
             }
 

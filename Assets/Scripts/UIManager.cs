@@ -311,22 +311,17 @@ public class UIManager : MonoBehaviour
         }
         else
         {
-            // 5. 遊戲結束
-            SetGamePaused(true); // 保持暫停
+            // 5. game over
+            SetGamePaused(true); 
         }
     }
 
     private void UpdateLivesDisplay()
     {
-        // 遍歷所有生命圖示
         for (int i = 0; i < lifeIcons.Length; i++)
         {
             if (lifeIcons[i] != null)
             {
-                // 如果當前索引 (i) 小於剩餘生命數 (currentLives)，則顯示圖示
-                // 例如：currentLives=3, i=0,1,2 都顯示
-                // 例如：currentLives=2, i=0,1 顯示, i=2 隱藏
-                // 由於 PacStudent 死了 i 從 0 開始，所以當生命從 3 變 2 時，i=2 的圖示會隱藏
                 lifeIcons[i].SetActive(i < currentLives);
             }
         }
