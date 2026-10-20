@@ -1,450 +1,179 @@
-    using System.Collections;
-    using System.Collections.Generic;
-    using UnityEngine;
+using System.Collections;
+using UnityEngine;
 
-    public class PacStudentController : MonoBehaviour
+public class PacStudentController : MonoBehaviour
+{
+    [SerializeField] private float moveDuration = 0.2f;
+    [SerializeField] private AudioClip pacMovingClip, pacEatClip, wallCollisionClip, pacDeathClip;
+    [SerializeField] private GameObject wallParticlePrefab, deathParticlePrefab;
+    private Vector3 lastInput, currentInput, facing = Vector3.right;
+    private Vector3 currentPosition, targetPosition, startPosition;
+    private bool isMoving, isDead, awaitingInput = true, wallContact;
+    private LevelGenerator levelGenerator;
+    private UIManager uiManager;
+    private Animator animator;
+    private AudioSource audioSource;
+    private ParticleSystem dustParticles;
+    private Coroutine movementRoutine;
+    public float MoveSpeed => 1f / Mathf.Max(0.01f, moveDuration);
+
+    void Awake()
     {
-        [SerializeField] private float moveDuration = 0.2f; 
-        [SerializeField] private AudioClip pacMovingClip;
-        [SerializeField] private AudioClip pacEatClip;
-        [SerializeField] private AudioClip wallCollisionClip;
-        [SerializeField] private GameObject wallParticlePrefab;
-        [SerializeField] private GameObject deathParticlePrefab;
-        // Movement
-        private bool isMoving = false; 
-        private Vector3 targetPosition; 
-        private Vector3 currentPosition; 
-        private Vector3 nextInput = Vector3.zero;
-        private Vector3 currentDirection = Vector3.zero;
-        private Vector3 lastDirection = Vector3.right;
-        
-        // Component references
-        private LevelGenerator levelGenerator; 
-        private Animator animator;
-        private AudioSource audioSource;
-        private ParticleSystem dustParticles;
-        
-        // Hit wall
-        private bool wallHitCooldown = false;
-        private float wallHitCooldownTime = 0.3f; 
-        private float wallHitTimer = 0f;
-        private bool isPlayingWallSound = false;
-        
-        // Transporter
-        private bool teleporterCooldown = false;
-        private const float teleporterCooldownTime = 0.1f;
-        
-        // Game State
-        private Vector3 startPosition; 
-        private UIManager uiManager;
-        [SerializeField] private AudioClip pacDeathClip; 
-        private bool isDead = false;
-
-
-        void Start()
-        {    
-
-            levelGenerator = FindFirstObjectByType<LevelGenerator>();
-            animator = GetComponent<Animator>();
-            dustParticles = GetComponentInChildren<ParticleSystem>();
-            audioSource = GetComponent<AudioSource>();
-            
-            // Snap to grid position
-            transform.position = new Vector3(
-                Mathf.Round(transform.position.x), 
-                Mathf.Round(transform.position.y), 
-                transform.position.z);
-            
-            currentPosition = transform.position;
-            targetPosition = transform.position;
-            
-            if (dustParticles != null)
-            {
-                dustParticles.Stop();
-            }
-
-            // UIManager 
-            uiManager = FindFirstObjectByType<UIManager>();
-            // Store original position
-            startPosition = transform.position;
-            currentPosition = startPosition;
-            targetPosition = startPosition;
-        }
-
-        void Update()
+        levelGenerator = FindFirstObjectByType<LevelGenerator>();
+        uiManager = FindFirstObjectByType<UIManager>();
+        animator = GetComponent<Animator>(); audioSource = GetComponent<AudioSource>();
+        dustParticles = GetComponentInChildren<ParticleSystem>();
+        startPosition = new Vector3(Mathf.Round(transform.position.x), Mathf.Round(transform.position.y), transform.position.z);
+        currentPosition = targetPosition = transform.position = startPosition;
+        if (animator != null) animator.updateMode = AnimatorUpdateMode.UnscaledTime;
+    }
+    void Start()
+    {
+        if (levelGenerator == null || uiManager == null)
         {
-            if (isDead) return;
-            
-            // Gather player input and update lastInput
-            if (Input.GetKeyDown(KeyCode.W)) nextInput = Vector3.up;
-            else if (Input.GetKeyDown(KeyCode.S)) nextInput = Vector3.down;
-            else if (Input.GetKeyDown(KeyCode.A)) nextInput = Vector3.left;
-            else if (Input.GetKeyDown(KeyCode.D)) nextInput = Vector3.right;
-            
-            if (wallHitCooldown)
-            {
-                wallHitTimer += Time.deltaTime;
-                if (wallHitTimer >= wallHitCooldownTime)
-                {
-                    wallHitCooldown = false;
-                    wallHitTimer = 0f;
-                }
-            }
-            
-            // Only process movement when not currently moving
-            if (!isMoving)
-            {
-                Vector3 chosenDir = Vector3.zero;
-                
-                // Check new input
-                if (nextInput != Vector3.zero && CanMoveInDirection(nextInput))
-                {
-                    currentDirection = nextInput;
-                    chosenDir = nextInput;
-                    nextInput = Vector3.zero; 
-                }
-                
-                else if (nextInput != Vector3.zero && !CanMoveInDirection(nextInput))
-                {
-                    if (!wallHitCooldown)
-                    {
-                        PlayWallCollisionEffect();
-                        wallHitCooldown = true;
-                    }
-                    nextInput = Vector3.zero; 
-                }
-                // keep current direction
-                else if (currentDirection != Vector3.zero && CanMoveInDirection(currentDirection))
-                {
-                    chosenDir = currentDirection;
-                }
-                else
-                {
-                    // cant move then stop
-                    ResetMovementStates();
-                    return;
-                }
-            
-                if (chosenDir != Vector3.zero)
-                {
-                    InitiateMovement(chosenDir);
-                }
-            }
+            Debug.LogError("PacStudent needs a LevelGenerator and UIManager.", this); enabled = false; return;
         }
-
-        // Check if movement is possible in the given direction
-        private bool CanMoveInDirection(Vector3 direction)
+        ResetPosition();
+    }
+    void Update()
+    {
+        if (isDead || !uiManager.IsRoundRunning) return;
+        if (Input.GetKeyDown(KeyCode.W)) SetInput(Vector3.up);
+        else if (Input.GetKeyDown(KeyCode.S)) SetInput(Vector3.down);
+        else if (Input.GetKeyDown(KeyCode.A)) SetInput(Vector3.left);
+        else if (Input.GetKeyDown(KeyCode.D)) SetInput(Vector3.right);
+        if (isMoving || awaitingInput) return;
+        Vector3 direction = CanMove(lastInput) ? lastInput : CanMove(currentInput) ? currentInput : Vector3.zero;
+        if (direction == Vector3.zero)
         {
-            Vector3 potentialTarget = currentPosition + direction;
-            Vector2Int gridPos = WorldToGrid(potentialTarget);
-            return levelGenerator.IsWalkable(gridPos.x, gridPos.y);
+            StopEffects();
+            if (!wallContact && (lastInput != Vector3.zero || currentInput != Vector3.zero))
+            {
+                wallContact = true; PlayWallEffect();
+            }
+            return;
         }
-        
-        // Start movement in the specified direction
-        private void InitiateMovement(Vector3 direction)
+        currentInput = facing = direction; wallContact = false;
+        targetPosition = currentPosition + direction;
+        movementRoutine = StartCoroutine(MoveToTarget());
+    }
+    public void SetInput(Vector3 direction)
+    {
+        // Input also has a single entry point for deterministic movement checks.
+        if (isDead || uiManager == null || !uiManager.IsRoundRunning) return;
+        if (direction != Vector3.up && direction != Vector3.down && direction != Vector3.left && direction != Vector3.right) return;
+        lastInput = direction; awaitingInput = false; wallContact = false;
+    }
+    private bool CanMove(Vector3 direction)
+    {
+        if (direction == Vector3.zero) return false;
+        Vector2Int cell = levelGenerator.WorldToGrid(currentPosition + direction);
+        return levelGenerator.IsWalkable(cell.x, cell.y) && !levelGenerator.IsGhostSpawn(cell);
+    }
+    private IEnumerator MoveToTarget()
+    {
+        isMoving = true; UpdateAnimation(true);
+        PlayMovementAudio();
+        if (dustParticles != null) dustParticles.Play();
+        float elapsed = 0f;
+        while (elapsed < moveDuration)
         {
-            targetPosition = currentPosition + direction;
-            lastDirection = direction;
-        
-            // Update animation
-            if (animator != null)
-            {
-                animator.SetFloat("MoveX", direction.x);
-                animator.SetFloat("MoveY", direction.y);
-                animator.SetBool("IsMoving", true);
-            }
-        
-            // Play movement audio
-            if (audioSource != null && !audioSource.isPlaying && pacMovingClip != null)
-            {
-                audioSource.clip = pacMovingClip;
-                audioSource.volume = 1f;
-                audioSource.loop = true;
-                audioSource.Play();            
-            }
-        
-            // Start dust particle effect
-            if (dustParticles != null && !dustParticles.isPlaying)
-            {
-                dustParticles.Play();
-            }
-        
-            StartCoroutine(MoveToTarget());
+            if (uiManager.IsRoundRunning) elapsed += Time.deltaTime;
+            transform.position = Vector3.Lerp(currentPosition, targetPosition, Mathf.Clamp01(elapsed / moveDuration));
+            yield return null;
         }
-        
-        // Convert world position to grid coordinates
-        private Vector2Int WorldToGrid(Vector3 worldPos)
+        currentPosition = transform.position = targetPosition;
+        var cell = levelGenerator.WorldToGrid(currentPosition);
+        if (cell.y == levelGenerator.Rows / 2 && (cell.x == 0 || cell.x == levelGenerator.Columns - 1))
         {
-            int gridX = Mathf.RoundToInt(worldPos.x);
-            int gridY = Mathf.RoundToInt(-worldPos.y); 
-            return new Vector2Int(gridX, gridY); 
+            cell.x = cell.x == 0 ? levelGenerator.Columns - 1 : 0;
+            currentPosition = targetPosition = transform.position = levelGenerator.GridToWorld(cell);
         }
-        
-        // Movement toward the target from current position
-        IEnumerator MoveToTarget()
+        isMoving = false; movementRoutine = null;
+    }
+    private void UpdateAnimation(bool moving)
+    {
+        if (animator == null) return;
+        animator.SetFloat("MoveX", facing.x); animator.SetFloat("MoveY", facing.y); animator.SetBool("IsMoving", moving);
+    }
+    private void PlayMovementAudio()
+    {
+        if (audioSource == null) return;
+        bool pelletAhead = false;
+        foreach (var hit in Physics2D.OverlapPointAll(targetPosition))
+            if (hit.GetComponent<PelletController>() != null || hit.GetComponent<PowerPillController>() != null) { pelletAhead = true; break; }
+        AudioClip clip = pelletAhead ? pacEatClip : pacMovingClip;
+        if (audioSource.clip == clip && audioSource.isPlaying) return;
+        audioSource.clip = clip; audioSource.loop = true;
+        if (clip != null) audioSource.Play();
+    }
+    private void StopEffects()
+    {
+        UpdateAnimation(false);
+        if (audioSource != null && audioSource.loop) { audioSource.Stop(); audioSource.loop = false; }
+        if (dustParticles != null) dustParticles.Stop();
+    }
+    public void StopMovement()
+    {
+        if (movementRoutine != null) StopCoroutine(movementRoutine);
+        movementRoutine = null; isMoving = false; StopEffects();
+    }
+    private void PlayWallEffect()
+    {
+        if (audioSource != null && wallCollisionClip != null) audioSource.PlayOneShot(wallCollisionClip);
+        if (wallParticlePrefab != null)
         {
-            isMoving = true; 
-            float elapsed = 0f;
-        
-            while (elapsed < moveDuration)
-            {
-                elapsed += Time.deltaTime;
-                float t = Mathf.Clamp01(elapsed / moveDuration);
-        
-                transform.position = Vector3.Lerp(currentPosition, targetPosition, t);
-                yield return null; 
-            }
-            
-            transform.position = targetPosition;
-            currentPosition = targetPosition;
-            isMoving = false;
-            
-            if (nextInput != Vector3.zero && CanMoveInDirection(nextInput))
-            {
-                currentDirection = nextInput;
-                nextInput = Vector3.zero;
-                InitiateMovement(currentDirection);
-            }
-            else if (currentDirection != Vector3.zero && CanMoveInDirection(currentDirection))
-            {
-                InitiateMovement(currentDirection);
-            }
-            else
-            {
-                currentDirection = Vector3.zero;
-                ResetMovementStates();
-            }
-        }
-        
-        // Stop all movement effects when blocked
-        private void ResetMovementStates()
-        {
-            // Update animation to idle state
-            if (animator != null)
-            {
-                animator.SetFloat("MoveX", lastDirection.x);
-                animator.SetFloat("MoveY", lastDirection.y);
-                animator.SetBool("IsMoving", false);
-            }
-
-            // Stop audio
-            if (audioSource != null && audioSource.isPlaying && !isPlayingWallSound)
-            {
-                audioSource.Stop();
-            }
-
-            // Stop particle effects
-            if (dustParticles != null && dustParticles.isPlaying)
-            {
-                dustParticles.Stop();
-            }
-        }
-        private void PlayWallCollisionEffect()
-        {
-            if (audioSource != null && wallCollisionClip != null)
-            {
-                if (audioSource.isPlaying && !isPlayingWallSound)
-                {
-                    audioSource.Stop();
-                }
-
-                audioSource.PlayOneShot(wallCollisionClip, 2.0f); 
-                isPlayingWallSound = true;
-                
-                StartCoroutine(ResetWallSoundFlagAfterDelay(wallCollisionClip.length));
-            }
-            
-            if (wallParticlePrefab != null)
-            {
-                Instantiate(wallParticlePrefab, transform.position, Quaternion.identity);
-            }
-        }
-        private IEnumerator ResetWallSoundFlagAfterDelay(float delay)
-        {
-            yield return new WaitForSeconds(delay);
-            isPlayingWallSound = false;
-        }
-        
-        private void OnTriggerEnter2D(Collider2D other)
-        {
-            if (other.CompareTag("Teleporter") && !teleporterCooldown)
-            {
-                GameObject targetTeleporter = null;
-    
-                if (other.name == "TeleporterLeft")
-                {
-                    targetTeleporter = GameObject.Find("TeleporterRight");
-                }
-                else if (other.name == "TeleporterRight")
-                {
-                    targetTeleporter = GameObject.Find("TeleporterLeft");
-                }
-            
-                if (targetTeleporter != null)
-                {
-                    Vector3 newPos = targetTeleporter.transform.position;
-                    newPos.z = transform.position.z;
-
-                    transform.position = newPos;
-                    currentPosition = newPos;
-                    targetPosition = newPos;
-                
-                    StartCoroutine(ResetTeleporterCooldownAfterDelay());
-                }
-            }
-            else if (other.CompareTag("Pellet"))
-            {
-                if (audioSource != null && pacEatClip != null)
-                {
-                    audioSource.PlayOneShot(pacEatClip, 0.5f);
-                }
-            }
-            else if (other.CompareTag("Ghost"))
-            {
-                GhostController ghost = other.GetComponent<GhostController>();
-
-                if (ghost != null)
-                {
-                    if (ghost.currentState == GhostState.Normal)
-                    {
-                        // Touch normal ghost：PacStudent dead
-                        HandleDeath();
-                    }
-                    else if (ghost.currentState == GhostState.Scared || ghost.currentState == GhostState.Recovering)
-                    {
-                        // touch Scared/Recovering ghost: eat ghost (TBC)
-                        Debug.Log("PacStudent ate the ghost! (Logic TBC)");
-                        HandleGhostEaten(ghost);
-                    }
-                }
-            }
-        }
-        private void HandleGhostEaten(GhostController ghost)
-        {
-            if (ghost.currentState == GhostState.Dead) return;
-            
-            // 2. PacStudentController 
-            if (uiManager != null)
-            {
-                const int GHOST_EAT_SCORE = 300;
-                uiManager.AddScore(GHOST_EAT_SCORE);
-            }
-            
-            // 3. Eat sound
-            if (audioSource != null && pacEatClip != null)
-            {
-                audioSource.PlayOneShot(pacEatClip, 0.5f);
-            }
-
-            // 4. bgm to Dead 
-            if (uiManager != null && uiManager.AudioController != null) 
-            {
-                uiManager.AudioController.PlayDeadMusic();
-            }
-    
-            // 5. ghost handle its own death
-            ghost.HandleEaten(uiManager);
-        }
-        private IEnumerator ResetTeleporterCooldownAfterDelay()
-        {
-            teleporterCooldown = true;
-            yield return new WaitForSeconds(teleporterCooldownTime);
-            teleporterCooldown = false;
-        }
-
-        public void ResetPosition()
-        {
-            // reset position
-            transform.position = startPosition;
-            currentPosition = startPosition;
-            targetPosition = startPosition;
-
-            // reset moving state
-            isMoving = false;
-            currentDirection = Vector3.zero;
-            lastDirection = Vector3.right;
-            nextInput = Vector3.zero;
-
-            // reset death state
-            isDead = false;
-
-            // rest to Idle
-            if (animator != null)
-            {
-                animator.SetBool("IsMoving", false);
-                // make sure Trigger is reset when dead
-                animator.ResetTrigger("Death"); 
-            }
-    
-            // stop all audio
-            if (audioSource != null && audioSource.isPlaying)
-            {
-                audioSource.Stop();
-            }
-            
-            Collider2D myCollider = GetComponent<Collider2D>();
-            if (myCollider != null)
-            {
-                myCollider.enabled = true;
-            }
-
-            Debug.Log("PacStudent Reset to Start Position.");
-        }
-        private void HandleDeath()
-        {
-            if (isDead) return; 
-            isDead = true;
-    
-            // 1. stop PacStudent moving
-            StopAllCoroutines(); 
-            isMoving = false;
-            
-            // stop Collider and moving
-            Collider2D myCollider = GetComponent<Collider2D>();
-            if (myCollider != null)
-            {
-                myCollider.enabled = false;
-            }
-            // play dead audio
-            if (audioSource != null && pacDeathClip != null)
-            {
-                audioSource.PlayOneShot(pacDeathClip);
-            }
-    
-            // deduct life
-            if (uiManager != null)
-            {
-                uiManager.LoseLife();
-            }
-        }
-        public void PlayDeathEffect()
-        {
-            // play dead audio
-            if (audioSource != null && pacDeathClip != null)
-            {
-                if (audioSource.isPlaying)
-                {
-                    audioSource.Stop();
-                }
-                audioSource.PlayOneShot(pacDeathClip);
-            }
-
-            // 1. play dead animator
-            if (animator != null) 
-            {
-                animator.SetTrigger("Death"); 
-                animator.SetBool("IsMoving", false); 
-            }
-        }
-
-        public void PlayDeathParticle()
-        {
-            if (deathParticlePrefab != null)
-            {
-                Instantiate(deathParticlePrefab, transform.position, Quaternion.identity);
-            }
+            var effect = Instantiate(wallParticlePrefab, transform.position + facing * 0.5f, Quaternion.identity);
+            Destroy(effect, 2f);
         }
     }
-
-
-           
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (isDead || uiManager == null || !uiManager.IsRoundRunning) return;
+        var ghost = other.GetComponent<GhostController>();
+        if (ghost == null || ghost.currentState == GhostState.Dead) return;
+        if (ghost.currentState == GhostState.Normal)
+        {
+            isDead = true; StopMovement();
+            var collider = GetComponent<Collider2D>(); if (collider != null) collider.enabled = false;
+            uiManager.LoseLife();
+        }
+        else
+        {
+            uiManager.AddScore(300); ghost.HandleEaten(uiManager);
+            if (audioSource != null && pacEatClip != null) audioSource.PlayOneShot(pacEatClip);
+        }
+    }
+    public void ResetPosition()
+    {
+        StopMovement();
+        currentPosition = targetPosition = transform.position = startPosition;
+        isDead = false; awaitingInput = true; wallContact = false; currentInput = Vector3.zero; facing = Vector3.right;
+        var collider = GetComponent<Collider2D>(); if (collider != null) collider.enabled = true;
+        if (animator != null)
+        {
+            animator.Rebind(); animator.Update(0f); animator.ResetTrigger("Death"); UpdateAnimation(false);
+        }
+    }
+    public void PlayDeathEffect()
+    {
+        StopMovement();
+        if (audioSource != null && pacDeathClip != null) audioSource.PlayOneShot(pacDeathClip);
+        if (animator != null) animator.SetTrigger("Death");
+    }
+    public void PlayDeathParticle()
+    {
+        if (deathParticlePrefab == null) return;
+        var effect = Instantiate(deathParticlePrefab, transform.position, Quaternion.identity);
+        foreach (var particles in effect.GetComponentsInChildren<ParticleSystem>())
+        {
+            var main = particles.main; main.useUnscaledTime = true;
+        }
+        StartCoroutine(RemoveDeathParticle(effect));
+    }
+    private IEnumerator RemoveDeathParticle(GameObject effect)
+    {
+        yield return new WaitForSecondsRealtime(3f);
+        if (effect != null) Destroy(effect);
+    }
+}

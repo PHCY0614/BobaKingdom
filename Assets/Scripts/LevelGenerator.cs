@@ -1,10 +1,8 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class LevelGenerator : MonoBehaviour
 {
-    //public GameObject manualLevel;
-    //public GameObject[] tilePrefabs;
-
     private int[,] _quadrantMap =
     {
         { 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 7 },
@@ -25,200 +23,64 @@ public class LevelGenerator : MonoBehaviour
     };
 
     private int[,] _levelMap;
-    
-    bool IsWall(int tile) => tile == 2 || tile == 4;
-    bool IsEmpty(int tile) => tile == 0 || tile == 5 || tile == 6;
-    bool IsCorner(int tile) => tile == 1 || tile == 3;
+    private readonly HashSet<Vector2Int> spawnCells = new HashSet<Vector2Int>();
+    private Vector2Int topExit;
+    private Vector2Int bottomExit;
+    public int Rows { get { EnsureMap(); return _levelMap.GetLength(0); } }
+    public int Columns { get { EnsureMap(); return _levelMap.GetLength(1); } }
+    public Bounds LevelBounds => new Bounds(new Vector3((Columns - 1) / 2f, -(Rows - 1) / 2f, 0), new Vector3(Columns, Rows, 1));
+    public Vector2Int GhostSpawnCentre { get; private set; }
 
-    void Awake()
+    void Awake() { EnsureMap(); }
+
+    private void EnsureMap()
     {
-        int rows = _quadrantMap.GetLength(0); 
-        int cols = _quadrantMap.GetLength(1);
-        int mirrorRows = rows - 1; // ignore the bottom row
-        int fullRows = rows + mirrorRows;
-        int fullCols = cols * 2;
-        int[,] fullMap = new int[fullRows, fullCols];
-        
-        CopyTo(fullMap, _quadrantMap, 0, 0, false, false, rows);
-        CopyTo(fullMap, _quadrantMap, rows, 0, false, true, mirrorRows);
-        CopyTo(fullMap, _quadrantMap, 0, cols, true, false, rows);
-        CopyTo(fullMap, _quadrantMap, rows, cols, true, true, mirrorRows);
-        
-        _levelMap = fullMap;
+        if (_levelMap != null) return;
+        int rows = _quadrantMap.GetLength(0), cols = _quadrantMap.GetLength(1);
+        _levelMap = new int[rows * 2 - 1, cols * 2];
+        for (int y = 0; y < rows * 2 - 1; y++)
+            for (int x = 0; x < cols * 2; x++)
+                _levelMap[y, x] = _quadrantMap[y < rows ? y : 2 * rows - 2 - y, x < cols ? x : 2 * cols - 1 - x];
+
+        int minY = int.MaxValue, maxY = -1, gateX = cols - 1;
+        for (int y = 0; y < _levelMap.GetLength(0); y++)
+            for (int x = 0; x < _levelMap.GetLength(1); x++)
+                if (_levelMap[y, x] == 8) { minY = Mathf.Min(minY, y); maxY = Mathf.Max(maxY, y); gateX = Mathf.Min(gateX, x); }
+        if (maxY < 0) return;
+        topExit = new Vector2Int(gateX, minY - 1);
+        bottomExit = new Vector2Int(gateX, maxY + 1);
+        GhostSpawnCentre = new Vector2Int(gateX, (minY + maxY) / 2);
+        var pending = new Queue<Vector2Int>();
+        pending.Enqueue(GhostSpawnCentre);
+        while (pending.Count > 0)
+        {
+            var cell = pending.Dequeue();
+            if (!InBounds(cell) || _levelMap[cell.y, cell.x] != 0 || !spawnCells.Add(cell)) continue;
+            pending.Enqueue(cell + Vector2Int.up); pending.Enqueue(cell + Vector2Int.down);
+            pending.Enqueue(cell + Vector2Int.left); pending.Enqueue(cell + Vector2Int.right);
+        }
     }
+
+    public Vector2Int WorldToGrid(Vector3 world) => new Vector2Int(Mathf.RoundToInt(world.x), Mathf.RoundToInt(-world.y));
+    public Vector3 GridToWorld(Vector2Int cell) => new Vector3(cell.x, -cell.y, 0);
+    public bool InBounds(Vector2Int cell) => cell.x >= 0 && cell.y >= 0 && cell.x < Columns && cell.y < Rows;
     public bool IsWalkable(int x, int y)
     {
-        // Get the dimensions of the map
-        int rows = _levelMap.GetLength(0); // y-axis size
-        int cols = _levelMap.GetLength(1); // x-axis size
-
-        // 1. Check if the position is outside the map boundaries
-        if (x < 0 || x >= cols) 
-        {
-            return false; // X is out of bounds
-        }
-        if (y < 0 || y >= rows)
-        {
-            return false; // Y is out of bounds
-        }
-
-        // 2. Check the tile value
-        int tileValue = _levelMap[y, x];
-        return (tileValue == 0 || tileValue == 5 || tileValue == 6);
+        EnsureMap();
+        var cell = new Vector2Int(x, y);
+        if (!InBounds(cell)) return false;
+        int tile = _levelMap[y, x];
+        return tile == 0 || tile == 5 || tile == 6;
     }
-
-    void CopyTo(int[,] target, int[,] source, int startY, int startX, bool mirrorX, bool mirrorY, int copyRows)
+    public bool IsGhostSpawn(Vector2Int cell) { EnsureMap(); return spawnCells.Contains(cell); }
+    public Vector2Int GetGhostExit(bool top) { EnsureMap(); return top ? topExit : bottomExit; }
+    public bool IsGhostStepAllowed(Vector2Int from, Vector2Int to, bool leavingSpawn)
     {
-        int cols = source.GetLength(1);
-
-        for (int y = 0; y < copyRows; y++)
-        {
-            for (int x = 0; x < cols; x++)
-            {
-                int srcY = mirrorY ? copyRows - 1 - y : y;
-                int srcX = mirrorX ? cols - 1 - x : x;
-
-                target[startY + y, startX + x] = source[srcY, srcX];
-            }
-        }
+        if (!InBounds(to)) return false;
+        if (leavingSpawn && (_levelMap[to.y, to.x] == 8 || IsGhostSpawn(to))) return true;
+        if (IsGhostSpawn(to) || _levelMap[to.y, to.x] == 8) return false;
+        // Tunnel endpoints belong to PacStudent; ghosts turn before reaching them.
+        if ((to.x == 0 || to.x == Columns - 1) && to.y == Rows / 2) return false;
+        return IsWalkable(to.x, to.y);
     }
-    /*void Start()
-    {
-        if (manualLevel != null) manualLevel.SetActive(false);
-
-        int rows = _levelMap.GetLength(0);
-        int cols = _levelMap.GetLength(1);
-        int mirrorRows = rows - 1; // ignore the bottom row
-        int fullRows = rows + mirrorRows;
-        int fullCols = cols * 2;
-
-        int[,] fullMap = new int[fullRows, fullCols];
-
-        // top left：original
-        CopyTo(fullMap, _levelMap, 0, 0, false, false, rows);
-
-        // bottom left：
-        CopyTo(fullMap, _levelMap, rows, 0, false, true, mirrorRows);
-
-        // top right
-        CopyTo(fullMap, _levelMap, 0, cols, true, false, rows);
-
-        // bottom right
-        CopyTo(fullMap, _levelMap, rows, cols, true, true, mirrorRows);
-
-        GenerateLevel(fullMap);
-        Debug.Log("Level successfully generated.");
-    }
-
-    // ------Main Function------
-    void GenerateLevel(int[,] map)
-    {
-        int rows = map.GetLength(0);
-        int cols = map.GetLength(1);
-
-        Vector3 offset = new Vector3(-cols / 2f + 9f, rows / 2f + 0.5f, 0);
-
-        for (int y = 0; y < rows; y++)
-        {
-            for (int x = 0; x < cols; x++)
-            {
-                int tile = map[y, x];
-
-                int rotation ;
-                if (IsWall(tile)) rotation = CalcWallRotation(x, y, map);
-                else if (IsCorner(tile)) rotation = CalcCornerRotation(x, y, map);
-                else if (tile == 7) rotation = CalcTJunctionRotation(x, y, map);
-                else rotation = 0;
-
-                // Generate tiles
-                if (tile >= 0 && tile < tilePrefabs.Length && tilePrefabs[tile] != null)
-                {
-                    Quaternion q = Quaternion.Euler(0, 0, rotation);
-                    Vector3 position = new Vector3(x, -y, 0) + offset;
-                    GameObject newTile = Instantiate(tilePrefabs[tile], position, q);
-                    newTile.transform.SetParent(this.transform);
-                }
-            }
-        }
-    }
-    // ------Rotation Methods------
-    int CalcWallRotation(int x, int y, int[,] map) // 2 and 4
-    {
-        int cols = map.GetLength(1);
-
-        bool leftEmpty = (x > 0) && IsEmpty(map[y, x - 1]);
-        bool rightEmpty = (x < cols - 1) && IsEmpty(map[y, x + 1]);
-
-        return (leftEmpty || rightEmpty) ? 90 : 0;
-    }
-
-    int CalcCornerRotation(int x, int y, int[,] map) // 1 and 3
-    {
-        int rows = map.GetLength(0);
-        int cols = map.GetLength(1);
-
-        bool rightWall = (x < cols - 1) && IsWall(map[y, x + 1]);
-        bool leftWall = (x > 0) && IsWall(map[y, x - 1]);
-        bool topWall = (y > 0) && IsWall(map[y - 1, x]);
-        bool bottomWall = (y < rows - 1) && IsWall(map[y + 1, x]);
-
-        bool rightEmpty = (x < cols - 1) && IsEmpty(map[y, x + 1]);
-        bool leftEmpty = (x > 0) && IsEmpty(map[y, x - 1]);
-        bool topEmpty = (y > 0) && IsEmpty(map[y - 1, x]);
-        bool bottomEmpty = (y < rows - 1) && IsEmpty(map[y + 1, x]);
-        
-        // Special rule: when 3 in a row + 0/5
-        if (map[y, x] == 3)
-        {
-            // Right edge exception
-            if (x == cols - 1 && bottomEmpty && leftEmpty) return 90;
-            
-            if (rightEmpty && topEmpty) return 270;
-            if (rightEmpty && bottomEmpty) return 180;
-            if (bottomEmpty && leftEmpty) return 90;
-            if (leftEmpty && topEmpty) return 0;
-        }
-
-        // Usual rule
-        if (map[y, x] == 1 || map[y, x] == 3)
-        {
-            int rightWallRotation = (rightWall) ? CalcWallRotation(x + 1, y, map) : -1;
-            int leftWallRotation = (leftWall) ? CalcWallRotation(x - 1, y, map) : -1;
-            int topWallRotation = (topWall) ? CalcWallRotation(x, y - 1, map) : -1;
-            int bottomWallRotation = (bottomWall) ? CalcWallRotation(x, y + 1, map) : -1;
-
-            if (rightWall && rightWallRotation == 0 && bottomWall && bottomWallRotation == 90) return 0;
-            if (rightWall && rightWallRotation == 0 && topWall && topWallRotation == 90) return 90;
-            if (leftWall && leftWallRotation == 0 && bottomWall && bottomWallRotation == 90) return 270;
-            if (leftWall && leftWallRotation == 0 && topWall && topWallRotation == 90) return 180;
-            
-            if (rightWall && bottomWall) return 0;
-            if (rightWall && topWall) return 270;
-            if (leftWall && bottomWall) return 90;
-            if (leftWall && topWall) return 180;
-        }
-
-        return 0;
-        
-    }
-            
-    int CalcTJunctionRotation(int x, int y, int[,] map) // 7
-    {
-        int rows = map.GetLength(0);
-        int cols = map.GetLength(1);
-
-        // Check if the four directions are walls
-        bool leftWall = (x > 0) && (map[y, x - 1] == 2);
-        bool rightWall = (x < cols - 1) && (map[y, x + 1] == 2);
-        bool topWall = (y > 0) && IsWall(map[y - 1, x]);
-        bool bottomWall = (y < rows - 1) && IsWall(map[y + 1, x]);
-
-        if (leftWall && rightWall && bottomWall) return 0;
-        if (leftWall && rightWall && topWall) return 180;
-
-        if (topWall && bottomWall && rightWall) return 90; // ⊣
-        if (topWall && bottomWall && leftWall) return 270; // ⊢
-
-        return 0;
-    }*/
-}    
+}
