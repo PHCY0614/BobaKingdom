@@ -327,6 +327,11 @@ public class GhostController : MonoBehaviour
         List<Vector2Int> nonReverse = candidates.FindAll(candidate => !IsReverse(from, candidate));
         List<Vector2Int> preferred = nonReverse.Count > 0 ? nonReverse : candidates;
 
+        if (IsInnovationNormalMode())
+        {
+            return ChooseInnovationNextGridPosition(from, preferred, candidates);
+        }
+
         int behaviourNumber = currentState == GhostState.Scared || currentState == GhostState.Recovering ? 1 : ghostNumber;
         if (behaviourNumber == 4)
         {
@@ -363,6 +368,163 @@ public class GhostController : MonoBehaviour
         }
 
         return preferred[UnityEngine.Random.Range(0, preferred.Count)];
+    }
+
+    private bool IsInnovationNormalMode()
+    {
+        return uiManager != null && uiManager.Innovation != null && currentState == GhostState.Normal;
+    }
+
+    private Vector2Int ChooseInnovationNextGridPosition(Vector2Int from, List<Vector2Int> preferred, List<Vector2Int> all)
+    {
+        Vector2Int playerCell = levelGenerator.WorldToGrid(pacStudent.transform.position);
+        Vector2Int target = playerCell;
+        if (ghostNumber == 1 || ghostNumber == 3)
+        {
+            target = ChooseInnovationInterceptTarget(playerCell);
+            if (target != playerCell && (target == from || GridDistance(from, playerCell) <= 3))
+            {
+                target = playerCell;
+            }
+        }
+
+        List<Vector2Int> choices = preferred.Count > 0 ? preferred : all;
+        Vector2Int best = FindInnovationStep(choices, from, BuildInnovationDistanceField(target));
+        if (best == from && target != playerCell)
+        {
+            best = FindInnovationStep(choices, from, BuildInnovationDistanceField(playerCell));
+        }
+
+        if (best != from)
+        {
+            return best;
+        }
+
+        return choices[UnityEngine.Random.Range(0, choices.Count)];
+    }
+
+    private Vector2Int FindInnovationStep(List<Vector2Int> choices, Vector2Int from,
+        Dictionary<Vector2Int, int> distances)
+    {
+        Vector2Int best = from;
+        int bestDistance = int.MaxValue;
+        foreach (Vector2Int candidate in choices)
+        {
+            int distance;
+            if (!distances.TryGetValue(candidate, out distance))
+            {
+                continue;
+            }
+
+            if (distance < bestDistance)
+            {
+                best = candidate;
+                bestDistance = distance;
+            }
+        }
+
+        return best;
+    }
+
+    private Vector2Int ChooseInnovationInterceptTarget(Vector2Int playerCell)
+    {
+        Vector2Int direction = new Vector2Int(
+            Mathf.RoundToInt(pacStudent.FacingDirection.x),
+            Mathf.RoundToInt(-pacStudent.FacingDirection.y));
+        if (direction == Vector2Int.zero)
+        {
+            direction = Vector2Int.right;
+        }
+
+        int sign = ghostNumber == 1 ? 1 : -1;
+        foreach (int distance in new[] { 3, 2 })
+        {
+            Vector2Int desired = playerCell + direction * (distance * sign);
+            Vector2Int target = FindNearestInnovationTarget(desired);
+            if (target != playerCell)
+            {
+                return target;
+            }
+        }
+
+        return playerCell;
+    }
+
+    private Dictionary<Vector2Int, int> BuildInnovationDistanceField(Vector2Int requestedTarget)
+    {
+        Vector2Int target = FindNearestInnovationTarget(requestedTarget);
+        var distances = new Dictionary<Vector2Int, int>();
+        var pending = new Queue<Vector2Int>();
+        distances[target] = 0;
+        pending.Enqueue(target);
+
+        while (pending.Count > 0)
+        {
+            Vector2Int cell = pending.Dequeue();
+            int distance = distances[cell] + 1;
+            foreach (Vector2Int neighbour in GetLegalNeighbours(cell, false))
+            {
+                if (distances.ContainsKey(neighbour))
+                {
+                    continue;
+                }
+
+                distances[neighbour] = distance;
+                pending.Enqueue(neighbour);
+            }
+        }
+
+        return distances;
+    }
+
+    private Vector2Int FindNearestInnovationTarget(Vector2Int requestedTarget)
+    {
+        if (IsInnovationTargetCell(requestedTarget))
+        {
+            return requestedTarget;
+        }
+
+        var visited = new HashSet<Vector2Int>();
+        var pending = new Queue<Vector2Int>();
+        visited.Add(requestedTarget);
+        pending.Enqueue(requestedTarget);
+        while (pending.Count > 0)
+        {
+            Vector2Int cell = pending.Dequeue();
+            foreach (Vector2Int direction in CardinalDirections)
+            {
+                Vector2Int neighbour = cell + direction;
+                if (!levelGenerator.InBounds(neighbour) || !visited.Add(neighbour))
+                {
+                    continue;
+                }
+
+                if (IsInnovationTargetCell(neighbour))
+                {
+                    return neighbour;
+                }
+
+                if (levelGenerator.IsWalkable(neighbour.x, neighbour.y))
+                {
+                    pending.Enqueue(neighbour);
+                }
+            }
+        }
+
+        return requestedTarget;
+    }
+
+    private bool IsInnovationTargetCell(Vector2Int cell)
+    {
+        return levelGenerator.InBounds(cell)
+            && levelGenerator.IsWalkable(cell.x, cell.y)
+            && !levelGenerator.IsGhostSpawn(cell)
+            && !(cell.y == levelGenerator.Rows / 2 && (cell.x == 0 || cell.x == levelGenerator.Columns - 1));
+    }
+
+    private int GridDistance(Vector2Int from, Vector2Int to)
+    {
+        return Mathf.Abs(from.x - to.x) + Mathf.Abs(from.y - to.y);
     }
 
     private Vector2Int ChooseClockwise(Vector2Int from, List<Vector2Int> preferred, List<Vector2Int> all)
@@ -502,7 +664,12 @@ public class GhostController : MonoBehaviour
     private float GetMoveSpeed()
     {
         float playerSpeed = pacStudent != null ? pacStudent.MoveSpeed : 5f;
-        return (currentState == GhostState.Normal ? 0.9f : 0.45f) * playerSpeed;
+        if (currentState != GhostState.Normal)
+        {
+            return 0.45f * playerSpeed;
+        }
+
+        return (IsInnovationNormalMode() && ghostNumber == 4 ? 0.75f : 0.9f) * playerSpeed;
     }
 
     private GhostState StateForScaredTimer()
