@@ -4,6 +4,7 @@ using System.Linq;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 
 [InitializeOnLoad]
@@ -99,6 +100,8 @@ public static class A4PlayChecks
                 Check(player.transform.position == new Vector3(1, -1, 0), "Countdown holds player at spawn");
                 var map = UnityEngine.Object.FindFirstObjectByType<LevelGenerator>();
                 Check(ghosts.Length == 4 && ghosts.All(g => map.IsGhostSpawn(map.WorldToGrid(g.transform.position))), "All ghosts remain in the house during countdown");
+                var countdownDetails = (TMPro.TextMeshProUGUI)new SerializedObject(ui).FindProperty("roundDetails").objectReferenceValue;
+                Check(countdownDetails != null && countdownDetails.text == "Get ready", "Countdown displays Get ready");
                 CheckAudio(ui.AudioController.audioSource, ui.AudioController.bgmIntro, "Countdown music");
                 CheckListenerOutput();
                 Capture("countdown.png"); Next(now);
@@ -124,10 +127,15 @@ public static class A4PlayChecks
                 var cherry = cherryController.transform.GetChild(0).gameObject;
                 var sprite = cherry.GetComponent<SpriteRenderer>();
                 Check(sprite.sortingOrder == 100 && sprite.maskInteraction != SpriteMaskInteraction.None, "Cherry uses top sorting order and sprite mask");
+                CheckHudLayout();
                 Capture("running.png"); cherryController.DestroyCherry(cherry);
                 player.StopMovement(); player.enabled = false; player.GetComponent<Collider2D>().enabled = false;
                 ui.StartScaredTimer(10f);
                 Check(ghosts.All(g => g.currentState == GhostState.Scared), "Power pill changes all living ghosts to Scared");
+                Check(ui.scaredTimerText != null && ui.scaredTimerText.gameObject.activeSelf
+                    && ui.scaredTimerText.text == "Power: 10s", "Power timer displays seconds");
+                var powerPanel = (GameObject)new SerializedObject(ui).FindProperty("powerPanel").objectReferenceValue;
+                if (powerPanel != null) Check(powerPanel.activeSelf, "Power panel is visible while powered");
                 Next(now);
             }
             else if (stage == 3 && elapsed > 7.2)
@@ -174,6 +182,9 @@ public static class A4PlayChecks
                 Check(player.transform.position == new Vector3(1, -1, 0), "Player respawns at start awaiting input");
                 Check(ghosts.All(g => g.currentState == GhostState.Normal), "Player death resets ghost state");
                 Check(ui.GetScaredTimeRemaining() == 0, "Player death clears scared timer");
+                Check(ui.scaredTimerText == null || !ui.scaredTimerText.gameObject.activeSelf, "Power timer hides at zero");
+                var powerPanel = (GameObject)new SerializedObject(ui).FindProperty("powerPanel").objectReferenceValue;
+                if (powerPanel != null) Check(!powerPanel.activeSelf, "Power panel hides at zero");
                 bool defeat = SessionState.GetBool(Flag + ".Defeat", false);
                 if (defeat)
                 {
@@ -188,6 +199,12 @@ public static class A4PlayChecks
                 Check(ui.State == UIManager.RoundState.GameOver, defeat ? "Zero lives ends the round" : "Eating the final pellet ends the round");
                 var message = (TMPro.TextMeshProUGUI)new SerializedObject(ui).FindProperty("roundMessage").objectReferenceValue;
                 Check(message.text == (defeat ? "Game Over" : "Victory!"), "Round result displays " + message.text);
+                var details = (TMPro.TextMeshProUGUI)new SerializedObject(ui).FindProperty("roundDetails").objectReferenceValue;
+                Check(details != null && details.text.Contains("SCORE  " + ui.CurrentScore.ToString("D6"))
+                    && details.text.Contains("TIME   " + UIManager.FormatTime(ui.ElapsedTime))
+                    && details.text.Contains("Returning to menu...")
+                    && details.text.Contains(defeat ? "Out of lives" : "All pearls collected"),
+                    "Round result displays outcome, score, time, and return message");
                 Check(UnityEngine.Object.FindObjectsByType<UnityEngine.UI.Button>(FindObjectsSortMode.None).All(b => !b.interactable), "Round end disables HUD buttons");
                 stoppedTimer = ui.ElapsedTime; Next(now);
             }
@@ -200,15 +217,92 @@ public static class A4PlayChecks
                 Check(UnityEngine.Object.FindFirstObjectByType<UIManager>().State == UIManager.RoundState.Menu, "Round end returns to main menu");
                 CheckMenuLayout(); Capture("menu.png"); Next(now);
             }
-            else if (stage == 9 && elapsed > 0.5) Finish("PASSED");
+            else if (stage == 9 && elapsed > 0.5)
+            {
+                var selected = EventSystem.current.currentSelectedGameObject;
+                ExecuteEvents.Execute(selected, new BaseEventData(EventSystem.current), ExecuteEvents.submitHandler);
+                Next(now);
+            }
+            else if (stage == 10 && SceneManager.GetActiveScene().name == "Level1Scene" && elapsed > 0.5)
+            {
+                Check(UnityEngine.Object.FindFirstObjectByType<UIManager>().State == UIManager.RoundState.Countdown,
+                    "Submitting the selected menu button starts Level 1");
+                var exit = GameObject.Find("Button - Exit");
+                Check(exit.GetComponentInChildren<TMPro.TextMeshProUGUI>().text == "Main Menu", "Return button names its destination");
+                ExecuteEvents.Execute(exit, new BaseEventData(EventSystem.current), ExecuteEvents.submitHandler);
+                Next(now);
+            }
+            else if (stage == 11 && SceneManager.GetActiveScene().name == "StartScene" && elapsed > 0.5)
+            {
+                Check(EventSystem.current.currentSelectedGameObject == GameObject.Find("Button - Level 1"),
+                    "Returning through Main Menu restores selection");
+                Finish("PASSED");
+            }
         }
         catch (Exception error) { Finish("FAILED: " + error.Message); }
+    }
+    private static Rect ScreenBounds(RectTransform rect)
+    {
+        var corners = new Vector3[4]; rect.GetWorldCorners(corners);
+        return new Rect(corners[0], corners[2] - corners[0]);
+    }
+    private static void CheckHudLayout()
+    {
+        Canvas.ForceUpdateCanvases();
+        var hud = GameObject.Find("HUD");
+        var map = UnityEngine.Object.FindFirstObjectByType<LevelGenerator>().LevelBounds;
+        var minimum = Camera.main.WorldToScreenPoint(map.min);
+        var maximum = Camera.main.WorldToScreenPoint(map.max);
+        var maze = new Rect(minimum, maximum - minimum);
+        foreach (string name in new[] { "HUD Info", "Power Panel", "Button - Exit" })
+        {
+            var rect = hud.GetComponentsInChildren<RectTransform>(true).First(r => r.name == name);
+            var bounds = ScreenBounds(rect);
+            Check(bounds.xMin >= 0 && bounds.yMin >= 0 && bounds.xMax <= Screen.width && bounds.yMax <= Screen.height
+                && !bounds.Overlaps(maze), name + " stays on screen and clear of the maze");
+        }
+        var lives = GameObject.Find("LivesContainer");
+        var info = ScreenBounds(GameObject.Find("HUD Info").GetComponent<RectTransform>());
+        foreach (var image in lives.GetComponentsInChildren<UnityEngine.UI.Image>())
+        {
+            var bounds = ScreenBounds(image.rectTransform);
+            Check(image.sprite.name == "Life" && info.Contains(bounds.min) && info.Contains(bounds.max),
+                image.name + " keeps the original leaf and fits inside HUD");
+        }
+        foreach (var label in new[] { ui.scoreText, ui.timerText })
+        {
+            label.ForceMeshUpdate();
+            Check(label.textInfo.lineCount == 2 && !label.isTextOverflowing, label.name + " fits its label and value");
+        }
     }
     private static void CheckMenuLayout()
     {
         Canvas.ForceUpdateCanvases();
-        var names = new[] { "Button - Level 1", "Level 1 - HighScoreText", "Level 1 - TimeText", "Button - Level 2", "Level 2 - HighScoreText", "Level 2 - TimeText" };
+        var level1 = GameObject.Find("Button - Level 1");
+        var level2 = GameObject.Find("Button - Level 2");
+        var title = GameObject.Find("Text - Title").GetComponent<TMPro.TextMeshProUGUI>();
+        var subtitle = GameObject.Find("Text - Subtitle").GetComponent<TMPro.TextMeshProUGUI>();
+        Check(level1 != null && level1.activeInHierarchy, "Level 1 button is visible");
+        Check(level2 != null && level2.activeInHierarchy
+            && !level2.GetComponent<UnityEngine.UI.Button>().interactable, "Level 2 button is visible and disabled");
+        Check(title.text == "Boba Kingdom", "Menu title is Boba Kingdom");
+        Check(subtitle.text == "The Popping Pearl Invasion", "Menu subtitle is The Popping Pearl Invasion");
+        Check(EventSystem.current != null && EventSystem.current.firstSelectedGameObject == level1,
+            "Menu initial focus is Level 1");
+        Check(EventSystem.current != null && EventSystem.current.currentSelectedGameObject == level1,
+            "Menu return focus is Level 1");
+        var scoreLabel = GameObject.Find("Level 1 - HighScoreText").GetComponent<TMPro.TextMeshProUGUI>();
+        var timeLabel = GameObject.Find("Level 1 - TimeText").GetComponent<TMPro.TextMeshProUGUI>();
+        if (PlayerPrefs.HasKey(ScoreKey))
+        {
+            Check(scoreLabel.text == "HIGH SCORE<pos=62%>" + PlayerPrefs.GetInt(ScoreKey).ToString("D6"),
+                "Level 1 high score record is aligned");
+            Check(timeLabel.text == "RUN TIME<pos=62%>" + UIManager.FormatTime(PlayerPrefs.GetFloat(TimeKey)),
+                "Level 1 run time record is aligned");
+        }
+        var names = new[] { "Button - Level 1", "Level 1 - HighScoreText", "Level 1 - TimeText", "Button - Level 2" };
         var rects = names.Select(name => GameObject.Find(name).GetComponent<RectTransform>()).ToArray();
+        var canvas = UnityEngine.Object.FindFirstObjectByType<Canvas>().GetComponent<RectTransform>();
         var bounds = new List<Rect>();
         foreach (var rect in rects)
         {
@@ -217,11 +311,31 @@ public static class A4PlayChecks
             Check(label.textInfo.lineCount == 1 && !label.isTextOverflowing, rect.name + " fits on one line");
             var corners = new Vector3[4]; rect.GetWorldCorners(corners);
             bounds.Add(new Rect(corners[0], corners[2] - corners[0]));
+            var canvasCorners = new Vector3[4]; canvas.GetWorldCorners(canvasCorners);
+            Check(corners[0].x >= canvasCorners[0].x && corners[2].x <= canvasCorners[2].x
+                && corners[0].y >= canvasCorners[0].y && corners[2].y <= canvasCorners[2].y,
+                rect.name + " stays inside canvas");
         }
         for (int i = 0; i < bounds.Count; i++)
             for (int j = i + 1; j < bounds.Count; j++)
                 if (bounds[i].Overlaps(bounds[j])) throw new Exception(names[i] + " overlaps " + names[j]);
-        Check(true, "Both level buttons and records have separate bounds at " + Screen.width + "x" + Screen.height);
+        int savedScore = PlayerPrefs.GetInt(ScoreKey);
+        bool hadScore = PlayerPrefs.HasKey(ScoreKey);
+        var loadRecords = typeof(UIManager).GetMethod("LoadMenuRecords", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var menu = UnityEngine.Object.FindFirstObjectByType<UIManager>();
+        try
+        {
+            PlayerPrefs.DeleteKey(ScoreKey); loadRecords.Invoke(menu, null);
+            scoreLabel.ForceMeshUpdate(); timeLabel.ForceMeshUpdate();
+            Check(scoreLabel.text == "No record yet" && timeLabel.text == "Play to set your first score"
+                && !scoreLabel.isTextOverflowing && !timeLabel.isTextOverflowing, "Empty records show a readable first-play hint");
+        }
+        finally
+        {
+            if (hadScore) PlayerPrefs.SetInt(ScoreKey, savedScore);
+            loadRecords.Invoke(menu, null);
+        }
+        Check(true, "Visible Level 1 button and records have separate bounds at " + Screen.width + "x" + Screen.height);
     }
 
     private static void CheckAudio(AudioSource source, AudioClip expected, string label)
