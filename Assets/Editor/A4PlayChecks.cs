@@ -13,6 +13,8 @@ public static class A4PlayChecks
     private const string Flag = "PacStudent.A4PlayChecks";
     private const string ScoreKey = "PacStudent.Level1Scene.HighScore";
     private const string TimeKey = "PacStudent.Level1Scene.BestTime";
+    private const string InnovationScoreKey = "PacStudent.InnovationScene.HighScore";
+    private const string InnovationTimeKey = "PacStudent.InnovationScene.BestTime";
     private static readonly List<string> passed = new List<string>();
     private static UIManager ui;
     private static PacStudentController player;
@@ -45,6 +47,10 @@ public static class A4PlayChecks
         SessionState.SetBool(Flag + ".HadTime", PlayerPrefs.HasKey(TimeKey));
         SessionState.SetInt(Flag + ".Score", PlayerPrefs.GetInt(ScoreKey));
         SessionState.SetFloat(Flag + ".Time", PlayerPrefs.GetFloat(TimeKey));
+        SessionState.SetBool(Flag + ".HadInnovationScore", PlayerPrefs.HasKey(InnovationScoreKey));
+        SessionState.SetBool(Flag + ".HadInnovationTime", PlayerPrefs.HasKey(InnovationTimeKey));
+        SessionState.SetInt(Flag + ".InnovationScore", PlayerPrefs.GetInt(InnovationScoreKey));
+        SessionState.SetFloat(Flag + ".InnovationTime", PlayerPrefs.GetFloat(InnovationTimeKey));
         SessionState.SetBool(Flag, true);
         WriteReport("RUNNING");
         EditorApplication.isPlaying = true;
@@ -284,7 +290,9 @@ public static class A4PlayChecks
         var subtitle = GameObject.Find("Text - Subtitle").GetComponent<TMPro.TextMeshProUGUI>();
         Check(level1 != null && level1.activeInHierarchy, "Level 1 button is visible");
         Check(level2 != null && level2.activeInHierarchy
-            && !level2.GetComponent<UnityEngine.UI.Button>().interactable, "Level 2 button is visible and disabled");
+            && level2.GetComponent<UnityEngine.UI.Button>().interactable
+            && level2.GetComponentInChildren<TMPro.TextMeshProUGUI>().text == "Play Level 2",
+            "Level 2 button is visible and enabled");
         Check(title.text == "Boba Kingdom", "Menu title is Boba Kingdom");
         Check(subtitle.text == "The Popping Pearl Invasion", "Menu subtitle is The Popping Pearl Invasion");
         Check(EventSystem.current != null && EventSystem.current.firstSelectedGameObject == level1,
@@ -293,6 +301,8 @@ public static class A4PlayChecks
             "Menu return focus is Level 1");
         var scoreLabel = GameObject.Find("Level 1 - HighScoreText").GetComponent<TMPro.TextMeshProUGUI>();
         var timeLabel = GameObject.Find("Level 1 - TimeText").GetComponent<TMPro.TextMeshProUGUI>();
+        var innovationScoreLabel = GameObject.Find("Level 2 - HighScoreText").GetComponent<TMPro.TextMeshProUGUI>();
+        var innovationTimeLabel = GameObject.Find("Level 2 - TimeText").GetComponent<TMPro.TextMeshProUGUI>();
         if (PlayerPrefs.HasKey(ScoreKey))
         {
             Check(scoreLabel.text == "HIGH SCORE<pos=62%>" + PlayerPrefs.GetInt(ScoreKey).ToString("D6"),
@@ -300,7 +310,28 @@ public static class A4PlayChecks
             Check(timeLabel.text == "RUN TIME<pos=62%>" + UIManager.FormatTime(PlayerPrefs.GetFloat(TimeKey)),
                 "Level 1 run time record is aligned");
         }
-        var names = new[] { "Button - Level 1", "Level 1 - HighScoreText", "Level 1 - TimeText", "Button - Level 2" };
+        else
+        {
+            Check(scoreLabel.text == "No record yet" && timeLabel.text == "Play to set your first score",
+                "Empty Level 1 records are aligned");
+        }
+        if (PlayerPrefs.HasKey(InnovationScoreKey))
+        {
+            Check(innovationScoreLabel.text == "HIGH SCORE<pos=62%>" + PlayerPrefs.GetInt(InnovationScoreKey).ToString("D6"),
+                "Level 2 high score record is aligned");
+            Check(innovationTimeLabel.text == "RUN TIME<pos=62%>" + UIManager.FormatTime(PlayerPrefs.GetFloat(InnovationTimeKey)),
+                "Level 2 run time record is aligned");
+        }
+        else
+        {
+            Check(innovationScoreLabel.text == "No record yet" && innovationTimeLabel.text == "Play to set your first score",
+                "Empty Level 2 records are aligned");
+        }
+        var names = new[]
+        {
+            "Button - Level 1", "Level 1 - HighScoreText", "Level 1 - TimeText",
+            "Button - Level 2", "Level 2 - HighScoreText", "Level 2 - TimeText"
+        };
         var rects = names.Select(name => GameObject.Find(name).GetComponent<RectTransform>()).ToArray();
         var canvas = UnityEngine.Object.FindFirstObjectByType<Canvas>().GetComponent<RectTransform>();
         var bounds = new List<Rect>();
@@ -320,22 +351,40 @@ public static class A4PlayChecks
             for (int j = i + 1; j < bounds.Count; j++)
                 if (bounds[i].Overlaps(bounds[j])) throw new Exception(names[i] + " overlaps " + names[j]);
         int savedScore = PlayerPrefs.GetInt(ScoreKey);
+        float savedTime = PlayerPrefs.GetFloat(TimeKey);
         bool hadScore = PlayerPrefs.HasKey(ScoreKey);
+        bool hadTime = PlayerPrefs.HasKey(TimeKey);
+        int savedInnovationScore = PlayerPrefs.GetInt(InnovationScoreKey);
+        float savedInnovationTime = PlayerPrefs.GetFloat(InnovationTimeKey);
+        bool hadInnovationScore = PlayerPrefs.HasKey(InnovationScoreKey);
+        bool hadInnovationTime = PlayerPrefs.HasKey(InnovationTimeKey);
         var loadRecords = typeof(UIManager).GetMethod("LoadMenuRecords", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         var menu = UnityEngine.Object.FindFirstObjectByType<UIManager>();
         try
         {
-            PlayerPrefs.DeleteKey(ScoreKey); loadRecords.Invoke(menu, null);
+            PlayerPrefs.DeleteKey(ScoreKey); PlayerPrefs.DeleteKey(TimeKey);
+            PlayerPrefs.DeleteKey(InnovationScoreKey); PlayerPrefs.DeleteKey(InnovationTimeKey);
+            loadRecords.Invoke(menu, null);
             scoreLabel.ForceMeshUpdate(); timeLabel.ForceMeshUpdate();
+            innovationScoreLabel.ForceMeshUpdate(); innovationTimeLabel.ForceMeshUpdate();
             Check(scoreLabel.text == "No record yet" && timeLabel.text == "Play to set your first score"
-                && !scoreLabel.isTextOverflowing && !timeLabel.isTextOverflowing, "Empty records show a readable first-play hint");
+                && !scoreLabel.isTextOverflowing && !timeLabel.isTextOverflowing, "Empty Level 1 records show a readable first-play hint");
+            Check(innovationScoreLabel.text == "No record yet" && innovationTimeLabel.text == "Play to set your first score"
+                && !innovationScoreLabel.isTextOverflowing && !innovationTimeLabel.isTextOverflowing, "Empty Level 2 records show a readable first-play hint");
         }
         finally
         {
             if (hadScore) PlayerPrefs.SetInt(ScoreKey, savedScore);
+            else PlayerPrefs.DeleteKey(ScoreKey);
+            if (hadTime) PlayerPrefs.SetFloat(TimeKey, savedTime);
+            else PlayerPrefs.DeleteKey(TimeKey);
+            if (hadInnovationScore) PlayerPrefs.SetInt(InnovationScoreKey, savedInnovationScore);
+            else PlayerPrefs.DeleteKey(InnovationScoreKey);
+            if (hadInnovationTime) PlayerPrefs.SetFloat(InnovationTimeKey, savedInnovationTime);
+            else PlayerPrefs.DeleteKey(InnovationTimeKey);
             loadRecords.Invoke(menu, null);
         }
-        Check(true, "Visible Level 1 button and records have separate bounds at " + Screen.width + "x" + Screen.height);
+        Check(true, "Both level buttons and records have separate bounds at " + Screen.width + "x" + Screen.height);
     }
 
     private static void CheckAudio(AudioSource source, AudioClip expected, string label)
@@ -380,6 +429,10 @@ public static class A4PlayChecks
         else PlayerPrefs.DeleteKey(ScoreKey);
         if (SessionState.GetBool(Flag + ".HadTime", false)) PlayerPrefs.SetFloat(TimeKey, SessionState.GetFloat(Flag + ".Time", 0));
         else PlayerPrefs.DeleteKey(TimeKey);
+        if (SessionState.GetBool(Flag + ".HadInnovationScore", false)) PlayerPrefs.SetInt(InnovationScoreKey, SessionState.GetInt(Flag + ".InnovationScore", 0));
+        else PlayerPrefs.DeleteKey(InnovationScoreKey);
+        if (SessionState.GetBool(Flag + ".HadInnovationTime", false)) PlayerPrefs.SetFloat(InnovationTimeKey, SessionState.GetFloat(Flag + ".InnovationTime", 0));
+        else PlayerPrefs.DeleteKey(InnovationTimeKey);
         PlayerPrefs.Save();
     }
 }

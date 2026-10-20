@@ -24,6 +24,7 @@ public class UIManager : MonoBehaviour
     public int RemainingPellets => remainingPellets;
     public float ElapsedTime => totalTime;
     public AudioController AudioController => audioController;
+    public InnovationController Innovation { get; private set; }
     private int currentScore, currentLives, remainingPellets;
     private float totalTime, scaredTimeRemaining;
     private bool isRecovering;
@@ -38,6 +39,7 @@ public class UIManager : MonoBehaviour
         pacStudentController = FindFirstObjectByType<PacStudentController>();
         ghostManager = FindFirstObjectByType<GhostManager>();
         audioController = FindFirstObjectByType<AudioController>();
+        Innovation = GetComponent<InnovationController>();
         if (SceneManager.GetActiveScene().name != "StartScene") State = RoundState.Countdown;
     }
 
@@ -79,7 +81,9 @@ public class UIManager : MonoBehaviour
 
     private IEnumerator StartRound()
     {
-        if (roundDetails != null) roundDetails.text = "Get ready";
+        if (roundDetails != null) roundDetails.text = Innovation != null
+            ? "Get ready\n<size=18>WASD to move | SPACE to shoot</size>"
+            : "Get ready";
         ShowMessage("3");
         if (audioController != null) audioController.PlayIntro();
         foreach (string message in new[] { "3", "2", "1", "GO!" })
@@ -111,7 +115,12 @@ public class UIManager : MonoBehaviour
         if (!IsRoundRunning) return;
         AddScore(points);
         remainingPellets = Mathf.Max(0, remainingPellets - 1);
-        if (remainingPellets == 0) StartCoroutine(EndRound(true));
+        if (Innovation != null) Innovation.CollectPearl(points);
+        else if (remainingPellets == 0) StartCoroutine(EndRound(true));
+    }
+    public void CompleteInnovation()
+    {
+        if (Innovation != null && IsRoundRunning) StartCoroutine(EndRound(true));
     }
     private void UpdateScoreDisplay() { if (scoreText != null) scoreText.text = "SCORE\n<size=26>" + currentScore.ToString("D6") + "</size>"; }
     public static string FormatTime(float seconds)
@@ -122,6 +131,7 @@ public class UIManager : MonoBehaviour
     private void UpdateTimerDisplay() { if (timerText != null) timerText.text = "TIME\n<size=26>" + FormatTime(totalTime) + "</size>"; }
     private void UpdateScaredTimerDisplay()
     {
+        if (Innovation != null) return;
         bool visible = scaredTimeRemaining > 0f;
         if (scaredTimerText != null)
         {
@@ -132,6 +142,7 @@ public class UIManager : MonoBehaviour
     }
     public void StartScaredTimer(float duration)
     {
+        if (Innovation != null) return;
         if (!IsRoundRunning) return;
         scaredTimeRemaining = duration; isRecovering = false;
         if (ghostManager != null) ghostManager.ChangeStateToScared();
@@ -151,6 +162,7 @@ public class UIManager : MonoBehaviour
     }
     private IEnumerator DeathSequence()
     {
+        Innovation?.ClearShots();
         State = RoundState.Death;
         pacStudentController.PlayDeathEffect(); pacStudentController.PlayDeathParticle();
         SetGamePaused(true);
@@ -158,11 +170,13 @@ public class UIManager : MonoBehaviour
         StopScaredTimer();
         if (ghostManager != null) ghostManager.ResetGhosts();
         pacStudentController.ResetPosition();
+        Innovation?.ResetAfterDeath();
         SetGamePaused(false); State = RoundState.Running;
         if (audioController != null) audioController.RefreshGhostMusic();
     }
     private IEnumerator EndRound(bool won)
     {
+        Innovation?.ClearShots();
         State = RoundState.GameOver;
         if (pacStudentController != null)
         {
@@ -171,7 +185,7 @@ public class UIManager : MonoBehaviour
         }
         SetGamePaused(true); ShowMessage(won ? "Victory!" : "Game Over");
         if (roundDetails != null)
-            roundDetails.text = (won ? "All pearls collected" : "Out of lives") + "\n\nSCORE  "
+            roundDetails.text = (won ? (Innovation != null ? "All popping pearls defeated" : "All pearls collected") : "Out of lives") + "\n\nSCORE  "
                 + currentScore.ToString("D6") + "\nTIME   " + FormatTime(totalTime)
                 + "\n\n<size=20>Returning to menu...</size>";
         foreach (var button in blockingImage.transform.root.GetComponentsInChildren<UnityEngine.UI.Button>(true)) button.interactable = false;
@@ -188,7 +202,7 @@ public class UIManager : MonoBehaviour
     {
         if (roundDetails != null)
             ((RectTransform)roundMessage.transform.parent).sizeDelta = State == RoundState.GameOver
-                ? new Vector2(440, 360) : new Vector2(320, 210);
+                ? new Vector2(440, 360) : Innovation != null ? new Vector2(400, 230) : new Vector2(320, 210);
         blockingImage.SetActive(true); roundMessage.text = message;
     }
     private void HideMessage() { blockingImage.SetActive(false); }
@@ -206,8 +220,10 @@ public class UIManager : MonoBehaviour
     {
         foreach (var label in FindObjectsByType<TextMeshProUGUI>(FindObjectsSortMode.None))
         {
-            if (!label.name.StartsWith("Level 1 -")) continue;
-            string scoreKey = ScoreKey("Level1Scene");
+            string level = label.name.StartsWith("Level 1 -") ? "Level1Scene"
+                : label.name.StartsWith("Level 2 -") ? "InnovationScene" : null;
+            if (level == null) continue;
+            string scoreKey = ScoreKey(level);
             if (!PlayerPrefs.HasKey(scoreKey))
             {
                 if (label.name.EndsWith("HighScoreText")) label.text = "No record yet";
@@ -215,7 +231,7 @@ public class UIManager : MonoBehaviour
                 continue;
             }
             if (label.name.EndsWith("HighScoreText")) label.text = "HIGH SCORE<pos=62%>" + PlayerPrefs.GetInt(scoreKey).ToString("D6");
-            else if (label.name.EndsWith("TimeText")) label.text = "RUN TIME<pos=62%>" + FormatTime(PlayerPrefs.GetFloat(TimeKey("Level1Scene"), 0f));
+            else if (label.name.EndsWith("TimeText")) label.text = "RUN TIME<pos=62%>" + FormatTime(PlayerPrefs.GetFloat(TimeKey(level), 0f));
         }
     }
     void OnDestroy() { Time.timeScale = 1f; }

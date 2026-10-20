@@ -11,7 +11,7 @@ public class GhostManager : MonoBehaviour
         {
             foreach (GhostController ghost in allGhosts)
             {
-                if (ghost != null && ghost.currentState == GhostState.Dead)
+                if (ghost != null && !ghost.IsPermanentlyDefeated && ghost.currentState == GhostState.Dead)
                 {
                     return true;
                 }
