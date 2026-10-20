@@ -9,5 +9,6 @@
 | [03-level-2-golden-rush.png](03-level-2-golden-rush.png) | Golden Rush and two charged shots |
 | [04-level-2-pearl-shot.png](04-level-2-pearl-shot.png) | Golden projectile and hit feedback |
 | [05-level-2-health.png](05-level-2-health.png) | Two-cell enemy health display |
+| [06-victory.png](06-victory.png) | Victory results screen |
 
 Captured from the game without Unity Editor panels. These are gameplay showcase frames, rather than a recorded complete playthrough. Original game artwork is unchanged.
