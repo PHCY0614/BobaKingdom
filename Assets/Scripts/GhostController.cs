@@ -19,6 +19,7 @@ public class GhostController : MonoBehaviour
     private LevelGenerator levelGenerator;
     private PacStudentController pacStudent;
     private Collider2D ghostCollider;
+    private GhostController[] innovationGhosts;
     private Coroutine movementRoutine;
     private Coroutine deadRoutine;
     private bool ghostFourOnOuterLoop;
@@ -91,6 +92,8 @@ public class GhostController : MonoBehaviour
             enabled = false;
             return;
         }
+        if (uiManager.Innovation != null)
+            innovationGhosts = FindObjectsByType<GhostController>(FindObjectsSortMode.None);
         ApplyState(currentState);
     }
 
@@ -267,7 +270,7 @@ public class GhostController : MonoBehaviour
         {
             if (IsRoundRunning())
             {
-                travelled = Mathf.Min(distance, travelled + GetMoveSpeed() * Time.deltaTime);
+                travelled = Mathf.Min(distance, travelled + GetSpacedMoveDistance(GetMoveSpeed() * Time.deltaTime));
             }
             transform.position = Vector3.Lerp(from, to, distance <= 0f ? 1f : travelled / distance);
             yield return null;
@@ -277,6 +280,26 @@ public class GhostController : MonoBehaviour
         currentPosition = to;
         movementRoutine = null;
         SetDirectionAnimation();
+    }
+
+    private float GetSpacedMoveDistance(float requestedDistance)
+    {
+        if (!IsInnovationNormalMode() || innovationGhosts == null) return requestedDistance;
+
+        // Keep same-speed ghosts apart after their routes merge, without blocking head-on crossings.
+        foreach (GhostController other in innovationGhosts)
+        {
+            if (other == null || other == this || !other.isActiveAndEnabled || other.IsPermanentlyDefeated
+                || other.uiManager != uiManager || other.currentState != GhostState.Normal
+                || Vector3.Dot(currentDirection, other.currentDirection) < 0.99f) continue;
+
+            Vector3 offset = other.transform.position - transform.position;
+            float ahead = Vector3.Dot(offset, currentDirection);
+            if (ahead < -0.2f || (offset - currentDirection * ahead).sqrMagnitude > 0.0225f) continue;
+            if (ahead <= 0.2f && other.ghostNumber > ghostNumber) continue;
+            requestedDistance = Mathf.Min(requestedDistance, Mathf.Max(0f, ahead - 0.85f));
+        }
+        return requestedDistance;
     }
 
     private IEnumerator ReturnToHomeRoutine()
