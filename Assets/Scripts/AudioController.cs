@@ -1,36 +1,31 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class AudioController : MonoBehaviour
 {
     public AudioSource audioSource;
-    public AudioClip bgmIntro;
-    public AudioClip bgmGhostNormal;
-    // Start is called before the first frame update
-    void Start()
+    public AudioClip bgmIntro, bgmGhostNormal, bgmGhostScared, bgmGhostDead;
+    private UIManager uiManager;
+    private GhostManager ghostManager;
+    void Awake()
     {
-        StartCoroutine(PlayBGM());
+        uiManager = FindFirstObjectByType<UIManager>();
+        ghostManager = FindFirstObjectByType<GhostManager>();
+        if (audioSource == null) audioSource = GetComponent<AudioSource>();
     }
-
-    IEnumerator PlayBGM()
+    public void PlayIntro() { Play(bgmIntro, false); }
+    public void PlayScaredMusic() { RefreshGhostMusic(); }
+    public void PlayNormalMusic() { RefreshGhostMusic(); }
+    public void PlayDeadMusic() { RefreshGhostMusic(); }
+    public void RefreshGhostMusic()
     {
-        //1. Play Intro Music
-        audioSource.clip = bgmIntro;
-        audioSource.Play();
-        
-        //2. Wait for 3 Seconds
-        yield return new WaitForSeconds(3.0f);
-        
-        //3. Loop BGM
-        audioSource.clip = bgmGhostNormal;
-        audioSource.loop = true;
-        audioSource.Play();
+        if (uiManager == null || !uiManager.IsRoundRunning) return;
+        Play(ghostManager != null && ghostManager.HasDeadGhost ? bgmGhostDead
+            : uiManager.GetScaredTimeRemaining() > 0f ? bgmGhostScared : bgmGhostNormal, true);
     }
-
-    // Update is called once per frame
-    void Update()
+    private void Play(AudioClip clip, bool loop)
     {
-        
+        if (audioSource == null || clip == null) return;
+        if (audioSource.clip == clip && audioSource.isPlaying) return;
+        audioSource.clip = clip; audioSource.loop = loop; audioSource.Play();
     }
 }
