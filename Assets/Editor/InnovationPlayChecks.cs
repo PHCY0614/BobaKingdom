@@ -168,6 +168,7 @@ public static class InnovationPlayChecks
             message.ForceMeshUpdate();
             Check(!message.isTextOverflowing, "Countdown message fits without text overflow");
         }
+        CheckResultOverlay(ui, false, RoundDetails() == null ? null : RoundDetails().text);
     }
 
     private static TMP_Text InnovationText(string field)
@@ -189,6 +190,44 @@ public static class InnovationPlayChecks
         Vector3[] corners = new Vector3[4];
         rect.GetWorldCorners(corners);
         return new Rect(corners[0], corners[2] - corners[0]);
+    }
+
+    private static void CheckResultOverlay(UIManager manager, bool gameOver, string reason)
+    {
+        TMP_Text details = UIText("roundDetails");
+        TMP_Text stats = UIText("roundStats");
+        TMP_Text footer = UIText("roundReturn");
+        Check(details != null && stats != null && footer != null, "Result overlay text references are assigned");
+        RectTransform statsFrame = stats == null ? null : stats.transform.parent as RectTransform;
+        RectTransform panel = details == null ? null : details.transform.parent as RectTransform;
+        Check(statsFrame != null && panel != null, "Result Stats and Round Panel are present");
+        UnityEngine.UI.Image statsImage = statsFrame == null ? null : statsFrame.GetComponent<UnityEngine.UI.Image>();
+        Check(statsFrame == null || statsFrame.name == "Result Stats", "Result Stats uses the named cream frame");
+        Check(statsImage != null && statsImage.color == new Color32(250, 239, 222, 255),
+            "Result Stats uses the cream FA EF DE background");
+        Check(stats.color == new Color32(59, 30, 20, 255), "Result stats use the dark brown text");
+        Check(footer.color == new Color32(250, 239, 222, 255), "Result footer uses the cream text");
+        Check(stats.gameObject.activeInHierarchy == gameOver && footer.gameObject.activeInHierarchy == gameOver
+            && statsFrame.gameObject.activeInHierarchy == gameOver, "Result stats and footer visibility follows GameOver");
+        details.ForceMeshUpdate(); stats.ForceMeshUpdate(); footer.ForceMeshUpdate();
+        Check(!details.isTextOverflowing && !stats.isTextOverflowing && !footer.isTextOverflowing,
+            "Result reason, stats, and footer fit without text overflow");
+        if (reason != null) Check(details.text == reason, "Result reason text is aligned");
+        if (!gameOver) return;
+        Check(stats.text == "SCORE<pos=54%>" + manager.CurrentScore.ToString("D6")
+            + "\nTIME<pos=54%>" + UIManager.FormatTime(manager.ElapsedTime),
+            "Result stats display score and time");
+        Check(footer.text == "Returning to menu...", "Result footer displays the return message");
+        Rect panelBounds = ScreenBounds(panel);
+        Rect statsBounds = ScreenBounds(statsFrame);
+        Check(panelBounds.Contains(statsBounds.min) && panelBounds.Contains(statsBounds.max),
+            "Result Stats stays inside Round Panel");
+        Check(!statsBounds.Overlaps(ScreenBounds(details.rectTransform))
+            && !statsBounds.Overlaps(ScreenBounds(footer.rectTransform)),
+            "Result Stats does not overlap the reason or footer");
+        Transform divider = panel.GetComponentsInChildren<Transform>(true)
+            .FirstOrDefault(transform => transform.name.IndexOf("Divider", StringComparison.OrdinalIgnoreCase) >= 0);
+        Check(divider != null && divider.gameObject.activeInHierarchy, "Result panel includes a visible divider");
     }
 
     private static void CheckCountdown(double now)
@@ -366,6 +405,7 @@ public static class InnovationPlayChecks
         TMP_Text details = RoundDetails();
         Check(details != null && details.text.Contains("All popping pearls defeated"),
             "Innovation victory uses the popping pearl reason");
+        CheckResultOverlay(ui, true, details.text);
         stoppedTimer = ui.ElapsedTime;
         Capture("victory.png");
         Next(now);
@@ -442,6 +482,7 @@ public static class InnovationPlayChecks
         {
             Check(defeatLosses == InitialLives && ui.CurrentLives == 0, "Defeat check reaches zero lives");
             Check(RoundDetails() != null && RoundDetails().text.Contains("Out of lives"), "Zero lives displays Game Over reason");
+            CheckResultOverlay(ui, true, RoundDetails().text);
             Capture("defeat.png");
             Next(now); return;
         }

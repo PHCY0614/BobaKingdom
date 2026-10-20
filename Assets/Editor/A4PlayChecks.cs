@@ -108,6 +108,7 @@ public static class A4PlayChecks
                 Check(ghosts.Length == 4 && ghosts.All(g => map.IsGhostSpawn(map.WorldToGrid(g.transform.position))), "All ghosts remain in the house during countdown");
                 var countdownDetails = (TMPro.TextMeshProUGUI)new SerializedObject(ui).FindProperty("roundDetails").objectReferenceValue;
                 Check(countdownDetails != null && countdownDetails.text == "Get ready", "Countdown displays Get ready");
+                CheckResultOverlay(ui, false, "Get ready");
                 CheckAudio(ui.AudioController.audioSource, ui.AudioController.bgmIntro, "Countdown music");
                 CheckListenerOutput();
                 Capture("countdown.png"); Next(now);
@@ -206,11 +207,9 @@ public static class A4PlayChecks
                 var message = (TMPro.TextMeshProUGUI)new SerializedObject(ui).FindProperty("roundMessage").objectReferenceValue;
                 Check(message.text == (defeat ? "Game Over" : "Victory!"), "Round result displays " + message.text);
                 var details = (TMPro.TextMeshProUGUI)new SerializedObject(ui).FindProperty("roundDetails").objectReferenceValue;
-                Check(details != null && details.text.Contains("SCORE  " + ui.CurrentScore.ToString("D6"))
-                    && details.text.Contains("TIME   " + UIManager.FormatTime(ui.ElapsedTime))
-                    && details.text.Contains("Returning to menu...")
-                    && details.text.Contains(defeat ? "Out of lives" : "All pearls collected"),
-                    "Round result displays outcome, score, time, and return message");
+                Check(details != null && details.text == (defeat ? "Out of lives" : "All pearls collected"),
+                    "Round result displays the outcome reason");
+                CheckResultOverlay(ui, true, details.text);
                 Check(UnityEngine.Object.FindObjectsByType<UnityEngine.UI.Button>(FindObjectsSortMode.None).All(b => !b.interactable), "Round end disables HUD buttons");
                 stoppedTimer = ui.ElapsedTime; Next(now);
             }
@@ -252,6 +251,51 @@ public static class A4PlayChecks
         var corners = new Vector3[4]; rect.GetWorldCorners(corners);
         return new Rect(corners[0], corners[2] - corners[0]);
     }
+
+    private static TMPro.TextMeshProUGUI UiText(UIManager manager, string field)
+    {
+        var property = new SerializedObject(manager).FindProperty(field);
+        return property == null ? null : property.objectReferenceValue as TMPro.TextMeshProUGUI;
+    }
+
+    private static void CheckResultOverlay(UIManager manager, bool gameOver, string reason)
+    {
+        var details = UiText(manager, "roundDetails");
+        var stats = UiText(manager, "roundStats");
+        var footer = UiText(manager, "roundReturn");
+        Check(details != null && stats != null && footer != null, "Result overlay text references are assigned");
+        var statsFrame = stats.transform.parent as RectTransform;
+        var panel = details == null ? null : details.transform.parent as RectTransform;
+        Check(statsFrame != null && panel != null, "Result Stats and Round Panel are present");
+        var statsImage = statsFrame == null ? null : statsFrame.GetComponent<UnityEngine.UI.Image>();
+        Check(statsFrame == null || statsFrame.name == "Result Stats", "Result Stats uses the named cream frame");
+        Check(statsImage != null && statsImage.color == new Color32(250, 239, 222, 255),
+            "Result Stats uses the cream FA EF DE background");
+        Check(stats.color == new Color32(59, 30, 20, 255), "Result stats use the dark brown text");
+        Check(footer.color == new Color32(250, 239, 222, 255), "Result footer uses the cream text");
+        Check(stats.gameObject.activeInHierarchy == gameOver && footer.gameObject.activeInHierarchy == gameOver
+            && statsFrame.gameObject.activeInHierarchy == gameOver, "Result stats and footer visibility follows GameOver");
+        details.ForceMeshUpdate(); stats.ForceMeshUpdate(); footer.ForceMeshUpdate();
+        Check(!details.isTextOverflowing && !stats.isTextOverflowing && !footer.isTextOverflowing,
+            "Result reason, stats, and footer fit without text overflow");
+        if (reason != null) Check(details.text == reason, "Result reason text is aligned");
+        if (!gameOver) return;
+        Check(stats.text == "SCORE<pos=54%>" + manager.CurrentScore.ToString("D6")
+            + "\nTIME<pos=54%>" + UIManager.FormatTime(manager.ElapsedTime),
+            "Result stats display score and time");
+        Check(footer.text == "Returning to menu...", "Result footer displays the return message");
+        var panelBounds = ScreenBounds(panel);
+        var statsBounds = ScreenBounds(statsFrame);
+        Check(panelBounds.Contains(statsBounds.min) && panelBounds.Contains(statsBounds.max),
+            "Result Stats stays inside Round Panel");
+        Check(!statsBounds.Overlaps(ScreenBounds(details.rectTransform))
+            && !statsBounds.Overlaps(ScreenBounds(footer.rectTransform)),
+            "Result Stats does not overlap the reason or footer");
+        var divider = panel.GetComponentsInChildren<Transform>(true)
+            .FirstOrDefault(transform => transform.name.IndexOf("Divider", StringComparison.OrdinalIgnoreCase) >= 0);
+        Check(divider != null && divider.gameObject.activeInHierarchy, "Result panel includes a visible divider");
+    }
+
     private static void CheckHudLayout()
     {
         Canvas.ForceUpdateCanvases();
