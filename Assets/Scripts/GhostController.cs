@@ -28,6 +28,7 @@ public class GhostController : MonoBehaviour
     private Vector3 targetPosition;
 
     public GhostState currentState = GhostState.Normal;
+    [field: System.NonSerialized] public bool IsPermanentlyDefeated { get; private set; }
 
     private static readonly Vector2Int[] CardinalDirections =
     {
@@ -95,7 +96,7 @@ public class GhostController : MonoBehaviour
 
     private void Update()
     {
-        if (currentState == GhostState.Dead || movementRoutine != null || !IsRoundRunning())
+        if (IsPermanentlyDefeated || currentState == GhostState.Dead || movementRoutine != null || !IsRoundRunning())
         {
             return;
         }
@@ -105,6 +106,11 @@ public class GhostController : MonoBehaviour
 
     public void SetState(GhostState newState)
     {
+        if (IsPermanentlyDefeated)
+        {
+            return;
+        }
+
         if (currentState == GhostState.Dead && newState != GhostState.Dead)
         {
             return;
@@ -115,7 +121,7 @@ public class GhostController : MonoBehaviour
 
     public void HandleEaten(UIManager eatenByUiManager)
     {
-        if (currentState == GhostState.Dead)
+        if (IsPermanentlyDefeated || currentState == GhostState.Dead)
         {
             return;
         }
@@ -140,8 +146,51 @@ public class GhostController : MonoBehaviour
         deadRoutine = StartCoroutine(ReturnToHomeRoutine());
     }
 
+    public void DefeatPermanently()
+    {
+        if (IsPermanentlyDefeated)
+        {
+            return;
+        }
+
+        IsPermanentlyDefeated = true;
+        if (movementRoutine != null)
+        {
+            StopCoroutine(movementRoutine);
+            movementRoutine = null;
+        }
+        if (deadRoutine != null)
+        {
+            StopCoroutine(deadRoutine);
+            deadRoutine = null;
+        }
+
+        if (animator != null)
+        {
+            animator.updateMode = AnimatorUpdateMode.UnscaledTime;
+        }
+        ApplyState(GhostState.Dead);
+        Canvas worldCanvas = GetComponentInChildren<Canvas>(true);
+        if (worldCanvas != null)
+        {
+            worldCanvas.gameObject.SetActive(false);
+        }
+        StartCoroutine(PermanentlyDefeatedRoutine());
+    }
+
+    private IEnumerator PermanentlyDefeatedRoutine()
+    {
+        yield return new WaitForSecondsRealtime(0.85f);
+        gameObject.SetActive(false);
+    }
+
     public void ResetPosition()
     {
+        if (IsPermanentlyDefeated)
+        {
+            return;
+        }
+
         if (movementRoutine != null)
         {
             StopCoroutine(movementRoutine);

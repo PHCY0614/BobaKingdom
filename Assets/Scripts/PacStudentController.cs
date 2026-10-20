@@ -16,6 +16,7 @@ public class PacStudentController : MonoBehaviour
     private ParticleSystem dustParticles;
     private Coroutine movementRoutine;
     public float MoveSpeed => 1f / Mathf.Max(0.01f, moveDuration);
+    public Vector3 FacingDirection => facing;
 
     void Awake()
     {
