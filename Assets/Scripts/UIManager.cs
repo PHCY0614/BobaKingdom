@@ -108,7 +108,7 @@ public class UIManager : MonoBehaviour
         if (!IsRoundRunning) return;
         AddScore(points);
         remainingPellets = Mathf.Max(0, remainingPellets - 1);
-        if (remainingPellets == 0) StartCoroutine(GameOver());
+        if (remainingPellets == 0) StartCoroutine(EndRound(true));
     }
     private void UpdateScoreDisplay() { if (scoreText != null) scoreText.text = "SCORE: " + currentScore.ToString("D6"); }
     public static string FormatTime(float seconds)
@@ -139,7 +139,7 @@ public class UIManager : MonoBehaviour
     {
         if (!IsRoundRunning || currentLives <= 0) return;
         currentLives--; UpdateLivesDisplay();
-        if (currentLives == 0) StartCoroutine(GameOver());
+        if (currentLives == 0) StartCoroutine(EndRound(false));
         else StartCoroutine(DeathSequence());
     }
     private IEnumerator DeathSequence()
@@ -154,7 +154,7 @@ public class UIManager : MonoBehaviour
         SetGamePaused(false); State = RoundState.Running;
         if (audioController != null) audioController.RefreshGhostMusic();
     }
-    private IEnumerator GameOver()
+    private IEnumerator EndRound(bool won)
     {
         State = RoundState.GameOver;
         if (pacStudentController != null)
@@ -162,7 +162,7 @@ public class UIManager : MonoBehaviour
             pacStudentController.StopMovement();
             if (currentLives == 0) { pacStudentController.PlayDeathEffect(); pacStudentController.PlayDeathParticle(); }
         }
-        SetGamePaused(true); ShowMessage("Game Over");
+        SetGamePaused(true); ShowMessage(won ? "Victory!" : "Game Over");
         foreach (var button in blockingImage.transform.root.GetComponentsInChildren<UnityEngine.UI.Button>(true)) button.interactable = false;
         SaveRecord(SceneManager.GetActiveScene().name, currentScore, totalTime);
         yield return new WaitForSecondsRealtime(3f);
