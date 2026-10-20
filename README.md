@@ -1,54 +1,55 @@
 # Boba Kingdom
 ### The Popping Pearl Invasion
 
+[English](README.md) | [正體中文（臺灣）](README.zh-TW.md)
+
 ![Boba Kingdom main menu](Screenshots/01-main-menu.png)
 
-一款以珍奶為主題的 2D 遊戲。玩家要操作奶茶收集珍珠，同時避開到處亂竄的爆爆珠。
+A bubble tea themed 2D game. Guide your milk tea through the maze, collect tapioca pearls, and dodge the roaming popping pearls.
 
-## 關於這個專案
+## About this project
 
-這是我在 UTS 修習 Introduction to Game Development 時製作的課程作業。
+This started as a coursework project for Introduction to Game Development at UTS.
 
-作業以 Pac-Man 的玩法為基礎，要求做出自己的主題與視覺設計，並完成：
+The assignment was based on Pac-Man, with our own theme and visual design. The requirements included:
 
-- Unity 2D 遊戲與自製像素美術。
-- 主選單、關卡、計分、生命與最高分紀錄。
-- 角色動畫、背景音樂與主要互動音效。
-- 四種不同敵人行為，以及一個有新玩法的創新關卡。
-- 以 Git 分支記錄開發過程。
+- A Unity 2D game with original pixel art.
+- A main menu, levels, scoring, lives, and saved high scores.
+- Character animations, background music, and sound effects for key interactions.
+- Four different enemy behaviours and an innovation level with a new gameplay mechanic.
+- Git branches to track development.
 
-課程結束後，我繼續補完玩法、調整介面，整理成現在的版本。
+After the course ended, I kept working on the gameplay and interface to bring it to its current state.
 
-## 設計概念
+## The idea
 
-身為手搖成癮者兼珍珠擁護者，我對手搖杯的要求是非常嚴格的。
-因此，對我而言，化學爆爆珠都是邪魔歪道。
+Coming from Taiwan, the birthplace of bubble tea, I have strong opinions about what belongs in my cup. Traditional tapioca pearls? Absolutely. Artificial popping pearls? Straight to hell.
 
-於是有了玩家操控奶茶，要在迷宮裡收集珍珠和冰塊（保冰用），敵人則是不同口味的爆爆珠的構想。
+So the idea was born: play as a cup of milk tea, collect tapioca pearls and ice cubes (to keep your drink cold), and face off against popping pearls in different flavours.
 
-## 怎麼玩
+## How to play
 
-- **WASD**：移動。
-- **Space**：在第二關發射珍珠。
+- **WASD**: Move.
+- **Space**: Fire a pearl in Level 2.
 
-**第一關**保留經典迷宮玩法：收集珍珠、避開爆爆珠；吃到大珍珠後，可以暫時反過來追牠們。
+**Level 1** keeps the classic maze gameplay: collect pearls and avoid the popping pearls. Pick up a large pearl to turn the tables and chase them for a short time.
 
-**第二關**加入珍珠射擊。爆爆珠會主動追過來，需要命中兩次才能擊滅，但會在 10 秒後從中央滿血重生。吃到大珍珠時會進入 Golden Rush，暫時擁有兩發充能。
+**Level 2** adds pearl shooting. The popping pearls actively chase you and take two hits to defeat, but respawn at the centre with full health after 10 seconds. Collect a large pearl to enter Golden Rush, temporarily giving you two shot charges.
 
-兩關都是吃完全部珍珠就能獲勝。
+Clear all the pearls to win either level.
 
-## 美術與音樂
+## Art and music
 
-奶茶、珍珠、爆爆珠、茶葉生命圖示和迷宮場景的像素素材，都是自己畫的。
+I drew all the pixel art for the milk tea, tapioca pearls, popping pearls, tea leaf life icons, and maze.
 
-背景音樂與音效取自 Mixkit 的免費素材。
+The background music and sound effects are from Mixkit’s free assets.
 
-## 遊戲畫面
+## Screenshots
 
 ![Level 2 Golden Rush](Screenshots/03-level-2-golden-rush.png)
 
-[查看更多遊戲截圖](Screenshots/README.md)
+[View more screenshots](Screenshots/README.md)
 
 ---
 
-使用 Unity 2023.2.10f1 製作，目前有 Windows 64 位元版本。
+Made with Unity 2023.2.10f1. A Windows 64-bit build is available.
