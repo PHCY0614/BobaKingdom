@@ -30,8 +30,14 @@ public static class A4PlayChecks
     static A4PlayChecks() { EditorApplication.playModeStateChanged += OnPlayModeChanged; }
 
     [MenuItem("PacStudent/Run A4 Play Mode checks")]
-    public static void Start()
+    public static void Start() { Begin(false); }
+
+    [MenuItem("PacStudent/Run A4 defeat Play Mode checks")]
+    public static void StartDefeatCheck() { Begin(true); }
+
+    private static void Begin(bool defeat)
     {
+        SessionState.SetBool(Flag + ".Defeat", defeat);
         if (EditorApplication.isPlaying || SceneManager.GetActiveScene().name != "Level1Scene")
             throw new InvalidOperationException("Open Level1Scene outside Play Mode before running checks.");
         SessionState.SetBool(Flag + ".HadScore", PlayerPrefs.HasKey(ScoreKey));
@@ -168,25 +174,56 @@ public static class A4PlayChecks
                 Check(player.transform.position == new Vector3(1, -1, 0), "Player respawns at start awaiting input");
                 Check(ghosts.All(g => g.currentState == GhostState.Normal), "Player death resets ghost state");
                 Check(ui.GetScaredTimeRemaining() == 0, "Player death clears scared timer");
-                int remaining = ui.RemainingPellets;
-                for (int i = 0; i < remaining; i++) ui.CollectPellet(10);
-                Check(ui.State == UIManager.RoundState.GameOver, "Eating the final pellet ends the round");
-                Check(UnityEngine.Object.FindObjectsByType<UnityEngine.UI.Button>(FindObjectsSortMode.None).All(b => !b.interactable), "Game Over disables HUD buttons");
+                bool defeat = SessionState.GetBool(Flag + ".Defeat", false);
+                if (defeat)
+                {
+                    ui.LoseLife();
+                    if (ui.CurrentLives > 0) return;
+                }
+                else
+                {
+                    int remaining = ui.RemainingPellets;
+                    for (int i = 0; i < remaining; i++) ui.CollectPellet(10);
+                }
+                Check(ui.State == UIManager.RoundState.GameOver, defeat ? "Zero lives ends the round" : "Eating the final pellet ends the round");
+                var message = (TMPro.TextMeshProUGUI)new SerializedObject(ui).FindProperty("roundMessage").objectReferenceValue;
+                Check(message.text == (defeat ? "Game Over" : "Victory!"), "Round result displays " + message.text);
+                Check(UnityEngine.Object.FindObjectsByType<UnityEngine.UI.Button>(FindObjectsSortMode.None).All(b => !b.interactable), "Round end disables HUD buttons");
                 stoppedTimer = ui.ElapsedTime; Next(now);
             }
             else if (stage == 7 && elapsed > 0.7)
             {
-                Check(ui.ElapsedTime == stoppedTimer, "Game Over freezes the game timer"); Capture("game-over.png"); Next(now);
+                Check(ui.ElapsedTime == stoppedTimer, "Round end freezes the game timer"); Capture(SessionState.GetBool(Flag + ".Defeat", false) ? "defeat.png" : "victory.png"); Next(now);
             }
             else if (stage == 8 && SceneManager.GetActiveScene().name == "StartScene")
             {
-                Check(UnityEngine.Object.FindFirstObjectByType<UIManager>().State == UIManager.RoundState.Menu, "Game Over returns to main menu");
-                Capture("menu.png"); Next(now);
+                Check(UnityEngine.Object.FindFirstObjectByType<UIManager>().State == UIManager.RoundState.Menu, "Round end returns to main menu");
+                CheckMenuLayout(); Capture("menu.png"); Next(now);
             }
             else if (stage == 9 && elapsed > 0.5) Finish("PASSED");
         }
         catch (Exception error) { Finish("FAILED: " + error.Message); }
     }
+    private static void CheckMenuLayout()
+    {
+        Canvas.ForceUpdateCanvases();
+        var names = new[] { "Button - Level 1", "Level 1 - HighScoreText", "Level 1 - TimeText", "Button - Level 2", "Level 2 - HighScoreText", "Level 2 - TimeText" };
+        var rects = names.Select(name => GameObject.Find(name).GetComponent<RectTransform>()).ToArray();
+        var bounds = new List<Rect>();
+        foreach (var rect in rects)
+        {
+            var label = rect.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+            label.ForceMeshUpdate();
+            Check(label.textInfo.lineCount == 1 && !label.isTextOverflowing, rect.name + " fits on one line");
+            var corners = new Vector3[4]; rect.GetWorldCorners(corners);
+            bounds.Add(new Rect(corners[0], corners[2] - corners[0]));
+        }
+        for (int i = 0; i < bounds.Count; i++)
+            for (int j = i + 1; j < bounds.Count; j++)
+                if (bounds[i].Overlaps(bounds[j])) throw new Exception(names[i] + " overlaps " + names[j]);
+        Check(true, "Both level buttons and records have separate bounds at " + Screen.width + "x" + Screen.height);
+    }
+
     private static void CheckAudio(AudioSource source, AudioClip expected, string label)
     {
         Check(source != null && expected != null && source.clip == expected && source.isPlaying
