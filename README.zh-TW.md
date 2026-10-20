@@ -1,4 +1,4 @@
-# Bubble Kingdom
+# Boba Kingdom
 ### The Popping Pearl Invasion
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
