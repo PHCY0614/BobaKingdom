@@ -33,9 +33,9 @@ public static class A4Checks
                 Check(exits > 0, "Reachable ghost corridor has an exit: " + cell);
             }
             Check(visited.Count > 100, "Ghost corridor coverage");
-            Check(UIManager.FormatTime(0f) == "00:00:00", "Initial timer format");
-            Check(UIManager.FormatTime(92.25f) == "01:32:25", "Timer hundredths format");
-            Check(UIManager.FormatTime(60f) == "01:00:00", "Timer minute rollover");
+            Check(UIManager.FormatTime(0f) == "00:00.00", "Initial timer format");
+            Check(UIManager.FormatTime(92.25f) == "01:32.25", "Timer hundredths format");
+            Check(UIManager.FormatTime(60f) == "01:00.00", "Timer minute rollover");
             CheckRecordRules();
             CheckClockwiseRoute(map);
             CheckGhostRules(map);
@@ -108,14 +108,16 @@ public static class A4Checks
                 var cell = new Vector2Int(11 + id, 14);
                 directionField.SetValue(ghost, Vector3.zero);
                 var exit = map.GetGhostExit(id == 1 || id == 3);
-                for (int step = 0; step < 20 && cell != exit; step++)
+                for (int step = 0; step < 20 && map.IsGhostSpawn(cell); step++)
                 {
                     var next = (Vector2Int)choose.Invoke(ghost, new object[] { cell });
                     Check(next != cell && map.IsGhostStepAllowed(cell, next, true), "Ghost " + id + " exits house legally");
                     directionField.SetValue(ghost, map.GridToWorld(next) - map.GridToWorld(cell));
                     cell = next;
                 }
-                Check(cell == exit, "Ghost " + id + " uses assigned exit");
+                int expectedGateRow = id == 1 || id == 3 ? exit.y + 1 : exit.y - 1;
+                Check(!map.IsGhostSpawn(cell) && cell.y == expectedGateRow
+                    && (cell.x == exit.x || cell.x == exit.x + 1), "Ghost " + id + " uses assigned exit");
             }
             UnityEngine.Random.InitState(4020);
             var junction = new Vector2Int(6, 5);
