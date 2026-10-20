@@ -31,6 +31,7 @@ public static class InnovationPlayChecks
     private static int stage;
     private static int defeatLosses;
     private static bool defeatMode;
+    private static bool ghostsFirstMode;
     private static bool cooldownProbePending;
     private static int goldenRushStage;
     private static double goldenRushStartedAt;
@@ -53,14 +54,21 @@ public static class InnovationPlayChecks
     [MenuItem("PacStudent/Run Innovation defeat Play Mode checks")]
     public static void StartDefeatCheck() { Begin(true); }
 
-    private static void Begin(bool defeat)
+    [MenuItem("PacStudent/Run Innovation ghosts-first Play Mode checks")]
+    public static void StartGhostsFirstCheck() { Begin(false, true); }
+
+    private static void Begin(bool defeat) { Begin(defeat, false); }
+
+    private static void Begin(bool defeat, bool ghostsFirst)
     {
         if (EditorApplication.isPlaying || SceneManager.GetActiveScene().name != "InnovationScene")
             throw new InvalidOperationException("Open InnovationScene outside Play Mode before running checks.");
         defeatMode = defeat;
+        ghostsFirstMode = ghostsFirst;
         SaveRecordSnapshot("Level1", Level1ScoreKey, Level1TimeKey);
         SaveRecordSnapshot("Level2", Level2ScoreKey, Level2TimeKey);
         SessionState.SetBool(Flag + ".Defeat", defeat);
+        SessionState.SetBool(Flag + ".GhostsFirst", ghostsFirst);
         SessionState.SetBool(Flag, true);
         WriteReport("RUNNING");
         EditorApplication.isPlaying = true;
@@ -80,6 +88,7 @@ public static class InnovationPlayChecks
         if (change == PlayModeStateChange.EnteredPlayMode)
         {
             defeatMode = SessionState.GetBool(Flag + ".Defeat", false);
+            ghostsFirstMode = SessionState.GetBool(Flag + ".GhostsFirst", false);
             passed.Clear(); stage = 0; defeatLosses = 0;
             cooldownProbePending = false; goldenRushStage = 0; timerFreezeChecked = false; menuCaptured = false;
             goldenRushStartedAt = 0d; pausedGoldenRush = 0f; pausedRoundTimer = 0f; pausedCooldown = 0f;
@@ -163,6 +172,9 @@ public static class InnovationPlayChecks
             Check(label != null, field + " is assigned");
             label.ForceMeshUpdate();
             Check(!label.isTextOverflowing, field + " fits without text overflow");
+            if (field == "targetStatusText")
+                Check(label.text.ToUpperInvariant().Contains("PEARLS LEFT"),
+                    "Target HUD displays the remaining pearl count");
             Rect bounds = ScreenBounds(label.rectTransform);
             Check(canvasBounds.Contains(bounds.min) && canvasBounds.Contains(bounds.max),
                 field + " stays inside the canvas");
@@ -357,10 +369,21 @@ public static class InnovationPlayChecks
                 "A large pearl scores fifty and refills two Golden Rush shots");
             Check(ui.GetScaredTimeRemaining() == 0f && ghosts.All(ghost => ghost.currentState == GhostState.Normal),
                 "Innovation pearls never activate Scared ghosts");
-            int remaining = ui.RemainingPellets;
-            for (int i = 0; i < remaining; i++) ui.CollectPellet(10);
-            Check(ui.State == UIManager.RoundState.Running && ui.RemainingPellets == 0,
-                "Collecting every pellet does not win Innovation mode");
+            if (!ghostsFirstMode)
+            {
+                int remaining = ui.RemainingPellets;
+                for (int i = 0; i < remaining; i++) ui.CollectPellet(10);
+                Check(ui.State == UIManager.RoundState.Running && ui.RemainingPellets == 0,
+                    "Collecting every pellet does not win Innovation mode");
+            }
+            else
+            {
+                Check(ui.State == UIManager.RoundState.Running && ui.RemainingPellets > 0,
+                    "Ghosts-first mode keeps the round running with pearls remaining");
+            }
+            ui.CompleteInnovation();
+            Check(ui.State == UIManager.RoundState.Running && innovation.DefeatedCount < innovation.TotalTargets,
+                "Completing Innovation early cannot win before all four ghosts are popped");
         }
         if (!CheckGoldenRush(now)) return;
         if (defeatMode)
@@ -675,10 +698,39 @@ public static class InnovationPlayChecks
         DefeatGhost(ghosts[1], false);
         DefeatGhost(ghosts[2], true);
         DefeatGhost(ghosts[3], true);
-        Check(ui.State == UIManager.RoundState.GameOver, "All four popped ghosts end the round");
+        Check(innovation.DefeatedCount == innovation.TotalTargets,
+            "All four ghosts are popped before the final pearl test");
+        if (ghostsFirstMode)
+        {
+            Check(ui.State == UIManager.RoundState.Running && ui.RemainingPellets > 0,
+                "Popping all ghosts first keeps the round running with pearls remaining");
+            int remaining = ui.RemainingPellets;
+            for (int i = 1; i < remaining; i++) ui.CollectPellet(10);
+            Check(ui.State == UIManager.RoundState.Running && ui.RemainingPellets == 1,
+                "Ghosts-first mode keeps running until its final pearl");
+            ui.CompleteInnovation();
+            Check(ui.State == UIManager.RoundState.Running,
+                "CompleteInnovation still waits for the final pearl");
+            int scoreBeforeFinalPearl = ui.CurrentScore;
+            ui.CollectPellet(10);
+            Check(ui.State == UIManager.RoundState.GameOver && ui.RemainingPellets == 0,
+                "The final pearl completes the ghosts-first round");
+            Check(ui.CurrentScore == scoreBeforeFinalPearl + 10,
+                "The final pearl is scored once");
+        }
+        else
+        {
+            Check(ui.State == UIManager.RoundState.GameOver,
+                "All four popped ghosts complete the cleared-pearl round");
+        }
+        int scoreAfterCompletion = ui.CurrentScore;
+        ui.CollectPellet(10);
+        ui.CompleteInnovation();
+        Check(ui.State == UIManager.RoundState.GameOver && ui.CurrentScore == scoreAfterCompletion,
+            "Repeated completion requests cannot score or restart the round");
         TMP_Text details = RoundDetails();
-        Check(details != null && details.text.Contains("All popping pearls defeated"),
-            "Innovation victory uses the popping pearl reason");
+        Check(details != null && details.text == "All pearls collected. All four popped.",
+            "Innovation victory requires all pearls and all four popped ghosts");
         CheckResultOverlay(ui, true, details.text);
         stoppedTimer = ui.ElapsedTime;
         Capture("victory.png");

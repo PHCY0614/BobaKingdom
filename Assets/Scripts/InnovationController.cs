@@ -87,7 +87,7 @@ public class InnovationController : MonoBehaviour
         if (targetStatusText != null)
         {
             targetStatusText.text = "POPPING PEARLS\n<size=26>" + defeatedCount + " / " + TotalTargets
-                + "</size>\n<size=15>Two hits to pop</size>\n<size=12>Big pearls grant\nGolden Rush</size>";
+                + "</size>\n<size=15>Two hits to pop</size>\n<size=12>PEARLS LEFT " + uiManager.RemainingPellets + "</size>";
         }
     }
 
