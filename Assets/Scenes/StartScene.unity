@@ -1686,8 +1686,8 @@ MonoBehaviour:
     Level 1: Collect all pearls.
     Avoid the popping pearls.
 
-    Level 2: Pop all four popping pearls. Two hits
-    each.'
+    Level 2: Pop all four. Two hits each. Big pearls
+    grant Golden Rush.'
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -3230,6 +3230,8 @@ MonoBehaviour:
   deathParticleWaitTime: 2
   roundMessage: {fileID: 0}
   roundDetails: {fileID: 0}
+  roundStats: {fileID: 0}
+  roundReturn: {fileID: 0}
   blockingImage: {fileID: 0}
 --- !u!1 &1341107922
 GameObject:
