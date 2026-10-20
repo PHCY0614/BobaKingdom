@@ -38,6 +38,7 @@ public static class A4Checks
             Check(UIManager.FormatTime(60f) == "01:00:00", "Timer minute rollover");
             CheckRecordRules();
             CheckClockwiseRoute(map);
+            CheckGhostRules(map);
             Debug.Log("A4 rule checks passed; ghost corridors visited: " + visited.Count);
         }
         finally { UnityEngine.Object.DestroyImmediate(temporary); }
@@ -74,6 +75,76 @@ public static class A4Checks
             Check(checkpoint == checkpoints.Length, "Ghost 4 follows all outer corners clockwise");
         }
         finally { UnityEngine.Object.DestroyImmediate(ghostObject); UnityEngine.Object.DestroyImmediate(playerObject); }
+    }
+
+    private static void CheckGhostRules(LevelGenerator map)
+    {
+        var ghostObject = new GameObject("Ghost rules check");
+        var playerObject = new GameObject("Ghost rules target");
+        var randomState = UnityEngine.Random.state;
+        try
+        {
+            var ghost = ghostObject.AddComponent<GhostController>();
+            var player = playerObject.AddComponent<PacStudentController>();
+            player.transform.position = map.GridToWorld(new Vector2Int(6, 4));
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var type = typeof(GhostController);
+            type.GetField("levelGenerator", flags).SetValue(ghost, map);
+            type.GetField("pacStudent", flags).SetValue(ghost, player);
+            var number = type.GetField("ghostNumber", flags);
+            var directionField = type.GetField("currentDirection", flags);
+            var choose = type.GetMethod("ChooseNextGridPosition", flags);
+            var speed = type.GetMethod("GetMoveSpeed", flags);
+            foreach (GhostState state in Enum.GetValues(typeof(GhostState)))
+            {
+                ghost.currentState = state;
+                float expected = player.MoveSpeed * (state == GhostState.Normal ? 0.9f : 0.45f);
+                Check(Mathf.Abs((float)speed.Invoke(ghost, null) - expected) < 0.001f, "Ghost speed for " + state);
+            }
+            ghost.currentState = GhostState.Normal;
+            for (int id = 1; id <= 4; id++)
+            {
+                number.SetValue(ghost, id);
+                var cell = new Vector2Int(11 + id, 14);
+                directionField.SetValue(ghost, Vector3.zero);
+                var exit = map.GetGhostExit(id == 1 || id == 3);
+                for (int step = 0; step < 20 && cell != exit; step++)
+                {
+                    var next = (Vector2Int)choose.Invoke(ghost, new object[] { cell });
+                    Check(next != cell && map.IsGhostStepAllowed(cell, next, true), "Ghost " + id + " exits house legally");
+                    directionField.SetValue(ghost, map.GridToWorld(next) - map.GridToWorld(cell));
+                    cell = next;
+                }
+                Check(cell == exit, "Ghost " + id + " uses assigned exit");
+            }
+            UnityEngine.Random.InitState(4020);
+            var junction = new Vector2Int(6, 5);
+            float currentDistance = (map.GridToWorld(junction) - player.transform.position).sqrMagnitude;
+            foreach (GhostState state in new[] { GhostState.Normal, GhostState.Scared, GhostState.Recovering })
+            {
+                ghost.currentState = state;
+                for (int id = 1; id <= 4; id++)
+                {
+                    if (state == GhostState.Normal && id > 2) continue;
+                    number.SetValue(ghost, id);
+                    directionField.SetValue(ghost, Vector3.right);
+                    for (int attempt = 0; attempt < 24; attempt++)
+                    {
+                        var next = (Vector2Int)choose.Invoke(ghost, new object[] { junction });
+                        Check(map.IsGhostStepAllowed(junction, next, false) && next != junction + Vector2Int.left,
+                            "Ghost selects a legal step without unnecessary reversal");
+                        float distance = (map.GridToWorld(next) - player.transform.position).sqrMagnitude;
+                        Check(state == GhostState.Normal && id == 2 ? distance <= currentDistance : distance >= currentDistance,
+                            "Ghost " + id + " distance rule for " + state);
+                    }
+                }
+            }
+        }
+        finally
+        {
+            UnityEngine.Random.state = randomState;
+            UnityEngine.Object.DestroyImmediate(ghostObject); UnityEngine.Object.DestroyImmediate(playerObject);
+        }
     }
 
     private static void CheckRecordRules()
