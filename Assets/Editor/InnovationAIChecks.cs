@@ -8,7 +8,7 @@ public static class InnovationAIChecks
 {
     private const BindingFlags InstancePrivate = BindingFlags.Instance | BindingFlags.NonPublic;
 
-    [MenuItem("PacStudent/Run Innovation AI checks")]
+    [MenuItem("Boba Kingdom/Run Innovation AI checks")]
     public static void Run()
     {
         UnityEngine.Random.State randomState = UnityEngine.Random.state;

@@ -5,7 +5,7 @@ using UnityEngine;
 
 public static class A4Checks
 {
-    [MenuItem("PacStudent/Run A4 rule checks")]
+    [MenuItem("Boba Kingdom/Run A4 rule checks")]
     public static void Run()
     {
         var temporary = new GameObject("A4 rule checks");

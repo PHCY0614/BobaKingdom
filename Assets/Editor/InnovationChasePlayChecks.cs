@@ -32,7 +32,7 @@ public static class InnovationChasePlayChecks
         EditorApplication.playModeStateChanged += OnPlayModeChanged;
     }
 
-    [MenuItem("PacStudent/Run Innovation chase Play Mode checks")]
+    [MenuItem("Boba Kingdom/Run Innovation chase Play Mode checks")]
     public static void Start()
     {
         if (EditorApplication.isPlaying || SceneManager.GetActiveScene().name != "InnovationScene")

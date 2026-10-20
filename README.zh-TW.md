@@ -3,13 +3,13 @@
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
-![Bubble Kingdom main menu](Screenshots/01-main-menu.png)
+![Boba Kingdom main menu](Screenshots/01-main-menu.png)
 
 一款以珍奶為主題的 2D 遊戲。玩家要操作奶茶收集珍珠，同時避開到處亂竄的爆爆珠。
 
 ### 線上遊玩
 
-🧋 **[前往 itch.io 遊玩 Bubble Kingdom](https://phcy0614.itch.io/boba-kingdom)**
+🧋 **[前往 itch.io 遊玩 Boba Kingdom](https://phcy0614.itch.io/boba-kingdom)**
 
 直接透過瀏覽器遊玩，不需要下載或安裝。
 

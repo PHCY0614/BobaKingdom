@@ -48,7 +48,7 @@ public static class InnovationSpacingPlayChecks
         EditorApplication.playModeStateChanged += OnPlayModeChanged;
     }
 
-    [MenuItem("PacStudent/Run Innovation spacing Play Mode checks")]
+    [MenuItem("Boba Kingdom/Run Innovation spacing Play Mode checks")]
     public static void Start()
     {
         if (EditorApplication.isPlaying || SceneManager.GetActiveScene().name != "InnovationScene")

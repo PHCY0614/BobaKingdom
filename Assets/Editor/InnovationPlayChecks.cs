@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -58,13 +58,13 @@ public static class InnovationPlayChecks
 
     static InnovationPlayChecks() { EditorApplication.playModeStateChanged += OnPlayModeChanged; }
 
-    [MenuItem("PacStudent/Run Innovation Play Mode checks")]
+    [MenuItem("Boba Kingdom/Run Innovation Play Mode checks")]
     public static void Start() { Begin(false); }
 
-    [MenuItem("PacStudent/Run Innovation defeat Play Mode checks")]
+    [MenuItem("Boba Kingdom/Run Innovation defeat Play Mode checks")]
     public static void StartDefeatCheck() { Begin(true); }
 
-    [MenuItem("PacStudent/Run Innovation no-pops Play Mode checks")]
+    [MenuItem("Boba Kingdom/Run Innovation no-pops Play Mode checks")]
     public static void StartNoPopsCheck() { Begin(false, true); }
 
     private static void Begin(bool defeat) { Begin(defeat, false); }

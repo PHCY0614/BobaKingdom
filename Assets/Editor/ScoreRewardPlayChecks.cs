@@ -36,7 +36,7 @@ public static class ScoreRewardPlayChecks
 
     static ScoreRewardPlayChecks() { EditorApplication.playModeStateChanged += OnPlayModeChanged; }
 
-    [MenuItem("Bubble Kingdom/Run score reward Play Mode checks")]
+    [MenuItem("Boba Kingdom/Run score reward Play Mode checks")]
     public static void Start()
     {
         if (EditorApplication.isPlaying || SceneManager.GetActiveScene().name != "InnovationScene")
