@@ -46,6 +46,7 @@ public static class InnovationAIChecks
             CheckInterceptTargets(map, ghost, player, choose, target);
             CheckClosedRoomInterceptFallback(map, ghost, player, choose, target);
             CheckRedSpeed(map, ghost, speed, ui, innovation);
+            CheckGhostSpacing(map, ui, innovation, player, temporaryObjects);
             CheckLevelOneBranch(map, ghost, player, speed, ui);
             Debug.Log("Innovation AI checks passed.");
         }
@@ -173,6 +174,99 @@ public static class InnovationAIChecks
         float levelOneSpeed = (float)speed.Invoke(ghost, null);
         Check(Mathf.Abs(levelOneSpeed - 4.5f) < 0.001f, "Level 1 keeps the original 90 percent speed");
         player.transform.position = map.GridToWorld(new Vector2Int(20, 5));
+    }
+
+    private static void CheckGhostSpacing(LevelGenerator map, UIManager ui,
+        InnovationController innovation, PacStudentController player, List<GameObject> temporaryObjects)
+    {
+        GameObject leaderObject = TemporaryObject("Innovation spacing leader");
+        GameObject followerObject = TemporaryObject("Innovation spacing follower");
+        temporaryObjects.Add(leaderObject);
+        temporaryObjects.Add(followerObject);
+        GhostController leader = leaderObject.AddComponent<GhostController>();
+        GhostController follower = followerObject.AddComponent<GhostController>();
+        SetField(leader, "uiManager", ui);
+        SetField(leader, "levelGenerator", map);
+        SetField(leader, "pacStudent", player);
+        SetField(leader, "ghostNumber", 1);
+        SetField(follower, "uiManager", ui);
+        SetField(follower, "levelGenerator", map);
+        SetField(follower, "pacStudent", player);
+        SetField(follower, "ghostNumber", 3);
+        MethodInfo spacedDistance = typeof(GhostController).GetMethod("GetSpacedMoveDistance", InstancePrivate);
+        Check(spacedDistance != null, "Ghost spacing reflection hook exists");
+        GhostController[] cache = { leader, follower };
+        SetField(leader, "innovationGhosts", cache);
+        SetField(follower, "innovationGhosts", cache);
+        leader.currentState = follower.currentState = GhostState.Normal;
+        SetField(leader, "<IsPermanentlyDefeated>k__BackingField", false);
+        SetField(follower, "<IsPermanentlyDefeated>k__BackingField", false);
+
+        SetMotion(map, leader, new Vector2Int(6, 5), Vector2Int.right);
+        SetMotion(map, follower, new Vector2Int(5, 5), Vector2Int.right);
+        float following = InvokeSpaced(spacedDistance, follower, 1f);
+        Check(following < 0.99f, "Same-lane follower respects the minimum gap");
+        Check(following <= 0.15f, "Same-lane follower preserves approximately 0.85 cells");
+
+        SetMotion(map, leader, new Vector2Int(6, 5), Vector2Int.right);
+        SetMotion(map, follower, new Vector2Int(6, 5), Vector2Int.right);
+        float leaderPriority = InvokeSpaced(spacedDistance, leader, 0.2f);
+        float followerPriority = InvokeSpaced(spacedDistance, follower, 0.2f);
+        Check(leaderPriority > followerPriority && Mathf.Abs(leaderPriority - 0.2f) < 0.001f,
+            "Exact overlap gives movement priority to the smaller ghost number");
+
+        SetMotion(map, leader, new Vector2Int(5, 5), Vector2Int.right);
+        SetMotion(map, follower, new Vector2Int(6, 5), Vector2Int.left);
+        Check(Mathf.Abs(InvokeSpaced(spacedDistance, leader, 1f) - 1f) < 0.001f,
+            "Head-on ghosts do not block each other");
+
+        SetMotion(map, leader, new Vector2Int(5, 5), Vector2Int.right);
+        SetMotion(map, follower, new Vector2Int(5, 8), Vector2Int.right);
+        Check(Mathf.Abs(InvokeSpaced(spacedDistance, follower, 1f) - 1f) < 0.001f,
+            "Parallel ghosts on different corridors do not block each other");
+
+        SetMotion(map, leader, new Vector2Int(6, 5), Vector2Int.right);
+        SetMotion(map, follower, new Vector2Int(5, 5), Vector2Int.right);
+        leader.gameObject.SetActive(false);
+        Check(Mathf.Abs(InvokeSpaced(spacedDistance, follower, 1f) - 1f) < 0.001f,
+            "Inactive spacing ghosts are ignored");
+        leader.gameObject.SetActive(true);
+        leader.enabled = false;
+        Check(Mathf.Abs(InvokeSpaced(spacedDistance, follower, 1f) - 1f) < 0.001f,
+            "Disabled spacing ghosts are ignored");
+        leader.enabled = true;
+        leader.currentState = GhostState.Dead;
+        Check(Mathf.Abs(InvokeSpaced(spacedDistance, follower, 1f) - 1f) < 0.001f,
+            "Dead spacing ghosts are ignored");
+        leader.currentState = GhostState.Normal;
+        SetField(leader, "<IsPermanentlyDefeated>k__BackingField", true);
+        Check(Mathf.Abs(InvokeSpaced(spacedDistance, follower, 1f) - 1f) < 0.001f,
+            "Permanently defeated spacing ghosts are ignored");
+        SetField(leader, "<IsPermanentlyDefeated>k__BackingField", false);
+
+        SetField(ui, "<Innovation>k__BackingField", null);
+        Check(Mathf.Abs(InvokeSpaced(spacedDistance, follower, 1f) - 1f) < 0.001f,
+            "Level 1 spacing returns the original requested distance");
+        SetField(ui, "<Innovation>k__BackingField", innovation);
+    }
+
+    private static void SetMotion(LevelGenerator map, GhostController ghost,
+        Vector2Int cell, Vector2Int gridDirection)
+    {
+        Vector3 position = map.GridToWorld(cell);
+        Vector3 target = map.GridToWorld(cell + gridDirection);
+        Vector3 direction = new Vector3(gridDirection.x, -gridDirection.y, 0f).normalized;
+        ghost.transform.position = position;
+        SetField(ghost, "currentPosition", position);
+        SetField(ghost, "targetPosition", target);
+        SetField(ghost, "currentDirection", direction);
+        SetField(ghost, "movementRoutine", null);
+        SetField(ghost, "deadRoutine", null);
+    }
+
+    private static float InvokeSpaced(MethodInfo spacedDistance, GhostController ghost, float requestedDistance)
+    {
+        return (float)spacedDistance.Invoke(ghost, new object[] { requestedDistance });
     }
 
     private static Vector2Int InvokeNext(MethodInfo choose, GhostController ghost, Vector2Int from)
