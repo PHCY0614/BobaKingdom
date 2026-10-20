@@ -25,6 +25,7 @@ public static class A4PlayChecks
     private static int stage;
     private static bool queuedTurn;
     private static float stoppedTimer;
+    private static readonly float[] audioSamples = new float[8192];
 
     static A4PlayChecks() { EditorApplication.playModeStateChanged += OnPlayModeChanged; }
 
@@ -71,6 +72,12 @@ public static class A4PlayChecks
             if (now - started > 60) throw new Exception("Play checks exceeded 60 seconds.");
             if (ui == null && stage < 8) ui = UnityEngine.Object.FindFirstObjectByType<UIManager>();
             if (player == null && stage < 8) player = UnityEngine.Object.FindFirstObjectByType<PacStudentController>();
+            // Unity fills output history after sampling begins; prime it across frames before assertions.
+            if (ui != null && ui.AudioController != null && ui.AudioController.audioSource != null)
+                ui.AudioController.audioSource.GetOutputData(audioSamples, 0);
+            if (player != null && player.GetComponent<AudioSource>() != null)
+                player.GetComponent<AudioSource>().GetOutputData(audioSamples, 0);
+            AudioListener.GetOutputData(audioSamples, 0);
             if (stage == 0 && elapsed > 1)
             {
                 ghosts = UnityEngine.Object.FindObjectsByType<GhostController>(FindObjectsSortMode.None);
@@ -78,6 +85,8 @@ public static class A4PlayChecks
                 Check(player.transform.position == new Vector3(1, -1, 0), "Countdown holds player at spawn");
                 var map = UnityEngine.Object.FindFirstObjectByType<LevelGenerator>();
                 Check(ghosts.Length == 4 && ghosts.All(g => map.IsGhostSpawn(map.WorldToGrid(g.transform.position))), "All ghosts remain in the house during countdown");
+                CheckAudio(ui.AudioController.audioSource, ui.AudioController.bgmIntro, "Countdown music");
+                CheckListenerOutput();
                 Capture("countdown.png"); Next(now);
             }
             else if (stage == 1 && ui.IsRoundRunning)
@@ -93,6 +102,9 @@ public static class A4PlayChecks
                 if (elapsed < 1.5) return;
                 Check(Mathf.Abs(player.transform.position.x - 6f) < 0.05f && player.transform.position.y < -1.1f, "Buffered turn survives blocked intersections and turns at column 6");
                 Check(ui.CurrentScore > 0, "Moving over pellets updates score");
+                CheckAudio(ui.AudioController.audioSource, ui.AudioController.bgmGhostNormal, "Normal background music");
+                var playerAudio = player.GetComponent<AudioSource>();
+                CheckAudio(playerAudio, playerAudio.clip, "Movement or eating sound");
                 Check(ghosts.Where((g, i) => Vector3.Distance(g.transform.position, ghostPositions[i]) > 0.5f).Any(), "Ghosts leave spawn and move");
                 Check(cherryController.transform.childCount == 1, "First Cherry appears by five and a half seconds");
                 var cherry = cherryController.transform.GetChild(0).gameObject;
@@ -109,11 +121,13 @@ public static class A4PlayChecks
                 Check(ui.GetScaredTimeRemaining() > 0 && ui.GetScaredTimeRemaining() <= 3f, "Scared countdown reaches final three seconds");
                 Check(cherryController.transform.childCount == 1, "Cherry respawns after removal");
                 Check(ghosts.All(g => g.currentState == GhostState.Recovering), "All ghosts enter Recovering");
+                CheckAudio(ui.AudioController.audioSource, ui.AudioController.bgmGhostScared, "Scared background music");
                 eatenGhost = ghosts.OrderByDescending(g => Vector3.Distance(g.transform.position, new Vector3(13.5f, -14, 0))).First();
                 eatenGhost.HandleEaten(ui);
                 Check(eatenGhost.currentState == GhostState.Dead && !eatenGhost.GetComponent<Collider2D>().enabled, "Eaten ghost is Dead and cannot collide");
                 ui.StartScaredTimer(10f);
                 Check(eatenGhost.currentState == GhostState.Dead, "A second power pill cannot overwrite Dead state");
+                Check(ui.AudioController.audioSource.clip == ui.AudioController.bgmGhostDead && ui.AudioController.audioSource.isPlaying, "Dead background music takes priority");
                 Next(now);
             }
             else if (stage == 4 && eatenGhost.currentState != GhostState.Dead)
@@ -157,6 +171,23 @@ public static class A4PlayChecks
             else if (stage == 9 && elapsed > 0.5) Finish("PASSED");
         }
         catch (Exception error) { Finish("FAILED: " + error.Message); }
+    }
+    private static void CheckAudio(AudioSource source, AudioClip expected, string label)
+    {
+        Check(source != null && expected != null && source.clip == expected && source.isPlaying
+            && !source.mute && source.volume > 0, label + " is playing");
+        var samples = new float[8192]; source.GetOutputData(samples, 0);
+        float peak = samples.Max(sample => Mathf.Abs(sample));
+        Check(peak > 0.00001f, label + " outputs a non-zero signal (peak=" + peak
+            + ", clipTime=" + source.time + ", samples=" + source.timeSamples + ", DSP=" + AudioSettings.dspTime
+            + ", virtual=" + source.isVirtual + ", listenerPause=" + AudioListener.pause
+            + ", masterMute=" + EditorUtility.audioMasterMute + ", focused=" + Application.isFocused + ")");
+    }
+    private static void CheckListenerOutput()
+    {
+        var samples = new float[8192]; AudioListener.GetOutputData(samples, 0);
+        Check(!EditorUtility.audioMasterMute && !AudioListener.pause && AudioListener.volume > 0
+            && samples.Any(sample => Mathf.Abs(sample) > 0.00001f), "AudioListener receives a non-zero mix without Unity mute");
     }
     private static void Capture(string file) { ScreenCapture.CaptureScreenshot("Temp/CodexChecks/" + file); }
     private static void Next(double now) { stage++; stageStarted = now; WriteReport("RUNNING: stage " + stage + "\n" + string.Join("\n", passed)); }
