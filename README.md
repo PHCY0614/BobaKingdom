@@ -1,11 +1,17 @@
 # Boba Kingdom
-### The Popping Pearl Invasion
+## The Popping Pearl Invasion
 
 [English](README.md) | [正體中文（臺灣）](README.zh-TW.md)
 
 ![Bubble Kingdom main menu](Screenshots/01-main-menu.png)
 
 A bubble tea themed 2D game. Guide your milk tea through the maze, collect tapioca pearls, and dodge the roaming popping pearls.
+
+### Play Online
+
+🧋 **[Play Boba Kingdom on itch.io](https://phcy0614.itch.io/boba-kingdom)**
+
+Play directly in your browser. No download or installation required.
 
 ## About this project
 
