@@ -17,7 +17,7 @@ public static class A4PlayChecks
     private static PacStudentController player;
     private static GhostController[] ghosts;
     private static Vector3[] ghostPositions;
-    private static GhostController eatenGhost;
+    private static readonly Dictionary<GhostController, HashSet<string>> deathSprites = new Dictionary<GhostController, HashSet<string>>();
     private static CherryController cherryController;
     private static Vector3 cherryDeathPosition;
     private static bool cherryPresentAtDeath;
@@ -48,7 +48,7 @@ public static class A4PlayChecks
         if (!SessionState.GetBool(Flag, false)) return;
         if (change == PlayModeStateChange.EnteredPlayMode)
         {
-            passed.Clear(); stage = 0; queuedTurn = false;
+            passed.Clear(); deathSprites.Clear(); stage = 0; queuedTurn = false;
             started = stageStarted = EditorApplication.timeSinceStartup;
             Application.runInBackground = true;
             EditorApplication.update -= Tick; EditorApplication.update += Tick;
@@ -78,9 +78,17 @@ public static class A4PlayChecks
             if (player != null && player.GetComponent<AudioSource>() != null)
                 player.GetComponent<AudioSource>().GetOutputData(audioSamples, 0);
             AudioListener.GetOutputData(audioSamples, 0);
+            if (stage == 4)
+                foreach (var ghost in ghosts)
+                    if (ghost.currentState == GhostState.Dead)
+                    {
+                        var sprite = ghost.GetComponent<SpriteRenderer>().sprite;
+                        if (sprite != null && sprite.name.StartsWith("Popping_dead_")) deathSprites[ghost].Add(sprite.name);
+                    }
             if (stage == 0 && elapsed > 1)
             {
-                ghosts = UnityEngine.Object.FindObjectsByType<GhostController>(FindObjectsSortMode.None);
+                ghosts = UnityEngine.Object.FindObjectsByType<GhostController>(FindObjectsSortMode.None)
+                    .OrderBy(g => new SerializedObject(g).FindProperty("ghostNumber").intValue).ToArray();
                 Check(ui.State == UIManager.RoundState.Countdown && ui.ElapsedTime == 0f, "Countdown holds timer at zero");
                 Check(player.transform.position == new Vector3(1, -1, 0), "Countdown holds player at spawn");
                 var map = UnityEngine.Object.FindFirstObjectByType<LevelGenerator>();
@@ -122,20 +130,27 @@ public static class A4PlayChecks
                 Check(cherryController.transform.childCount == 1, "Cherry respawns after removal");
                 Check(ghosts.All(g => g.currentState == GhostState.Recovering), "All ghosts enter Recovering");
                 CheckAudio(ui.AudioController.audioSource, ui.AudioController.bgmGhostScared, "Scared background music");
-                eatenGhost = ghosts.OrderByDescending(g => Vector3.Distance(g.transform.position, new Vector3(13.5f, -14, 0))).First();
-                eatenGhost.HandleEaten(ui);
-                Check(eatenGhost.currentState == GhostState.Dead && !eatenGhost.GetComponent<Collider2D>().enabled, "Eaten ghost is Dead and cannot collide");
+                var corners = new[] { new Vector3(1, -1), new Vector3(26, -1), new Vector3(26, -27), new Vector3(1, -27) };
+                for (int i = 0; i < ghosts.Length; i++)
+                {
+                    ghosts[i].transform.position = corners[i];
+                    deathSprites[ghosts[i]] = new HashSet<string>();
+                    ghosts[i].HandleEaten(ui);
+                }
+                Check(ghosts.All(g => g.currentState == GhostState.Dead && !g.GetComponent<Collider2D>().enabled), "All four eaten ghosts are Dead and cannot collide");
                 ui.StartScaredTimer(10f);
-                Check(eatenGhost.currentState == GhostState.Dead, "A second power pill cannot overwrite Dead state");
+                Check(ghosts.All(g => g.currentState == GhostState.Dead), "A second power pill cannot overwrite any Dead state");
                 Check(ui.AudioController.audioSource.clip == ui.AudioController.bgmGhostDead && ui.AudioController.audioSource.isPlaying, "Dead background music takes priority");
                 Next(now);
             }
-            else if (stage == 4 && eatenGhost.currentState != GhostState.Dead)
+            else if (stage == 4 && ghosts.All(g => g.currentState != GhostState.Dead))
             {
-                Check(eatenGhost.GetComponent<Collider2D>().enabled, "Returned ghost restores collisions");
+                for (int i = 0; i < ghosts.Length; i++)
+                    Check(deathSprites[ghosts[i]].Count == 4, "Ghost " + (i + 1) + " plays all four death sprites: " + string.Join(",", deathSprites[ghosts[i]]));
+                Check(ghosts.All(g => g.GetComponent<Collider2D>().enabled), "All returned ghosts restore collisions");
                 float remaining = ui.GetScaredTimeRemaining();
                 var expected = remaining <= 0 ? GhostState.Normal : remaining <= 3 ? GhostState.Recovering : GhostState.Scared;
-                Check(eatenGhost.currentState == expected, "Returned ghost matches current scared timer");
+                Check(ghosts.All(g => g.currentState == expected), "All returned ghosts match current scared timer");
                 cherryPresentAtDeath = cherryController.transform.childCount > 0;
                 if (cherryPresentAtDeath) cherryDeathPosition = cherryController.transform.GetChild(0).position;
                 ui.LoseLife(); ghostPositions = ghosts.Select(g => g.transform.position).ToArray();
