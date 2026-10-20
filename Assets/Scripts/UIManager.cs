@@ -14,6 +14,7 @@ public class UIManager : MonoBehaviour
     [SerializeField] private float deathParticleWaitTime = 2f;
     [SerializeField] private TextMeshProUGUI roundMessage;
     [SerializeField] private TextMeshProUGUI roundDetails;
+    [SerializeField] private TextMeshProUGUI roundStats, roundReturn;
     [SerializeField] private GameObject blockingImage;
 
     public enum RoundState { Menu, Countdown, Running, Death, GameOver }
@@ -185,9 +186,10 @@ public class UIManager : MonoBehaviour
         }
         SetGamePaused(true); ShowMessage(won ? "Victory!" : "Game Over");
         if (roundDetails != null)
-            roundDetails.text = (won ? (Innovation != null ? "All popping pearls defeated" : "All pearls collected") : "Out of lives") + "\n\nSCORE  "
-                + currentScore.ToString("D6") + "\nTIME   " + FormatTime(totalTime)
-                + "\n\n<size=20>Returning to menu...</size>";
+            roundDetails.text = won ? (Innovation != null ? "All popping pearls defeated" : "All pearls collected") : "Out of lives";
+        if (roundStats != null)
+            roundStats.text = "SCORE<pos=54%>" + currentScore.ToString("D6") + "\nTIME<pos=54%>" + FormatTime(totalTime);
+        if (roundReturn != null) roundReturn.text = "Returning to menu...";
         foreach (var button in blockingImage.transform.root.GetComponentsInChildren<UnityEngine.UI.Button>(true)) button.interactable = false;
         SaveRecord(SceneManager.GetActiveScene().name, currentScore, totalTime);
         yield return new WaitForSecondsRealtime(3f);
@@ -200,9 +202,21 @@ public class UIManager : MonoBehaviour
     }
     private void ShowMessage(string message)
     {
+        bool ended = State == RoundState.GameOver;
         if (roundDetails != null)
-            ((RectTransform)roundMessage.transform.parent).sizeDelta = State == RoundState.GameOver
+        {
+            ((RectTransform)roundMessage.transform.parent).sizeDelta = ended
                 ? new Vector2(440, 360) : Innovation != null ? new Vector2(400, 230) : new Vector2(320, 210);
+            if (ended)
+            {
+                RectTransform details = roundDetails.rectTransform;
+                details.anchorMin = details.anchorMax = details.pivot = new Vector2(0.5f, 1f);
+                details.anchoredPosition = new Vector2(0, -114);
+                details.sizeDelta = new Vector2(400, 36);
+            }
+        }
+        if (roundStats != null) roundStats.transform.parent.gameObject.SetActive(ended);
+        if (roundReturn != null) roundReturn.gameObject.SetActive(ended);
         blockingImage.SetActive(true); roundMessage.text = message;
     }
     private void HideMessage() { blockingImage.SetActive(false); }
