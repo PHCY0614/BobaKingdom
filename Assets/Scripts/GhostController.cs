@@ -22,6 +22,8 @@ public class GhostController : MonoBehaviour
     private GhostController[] innovationGhosts;
     private Coroutine movementRoutine;
     private Coroutine deadRoutine;
+    private GameObject innovationHealthRoot;
+    private UnityEngine.UI.Image[] innovationHealthCells;
     private bool ghostFourOnOuterLoop;
     private Vector3 startPosition;
     private Vector3 currentPosition;
@@ -179,6 +181,103 @@ public class GhostController : MonoBehaviour
             worldCanvas.gameObject.SetActive(false);
         }
         StartCoroutine(PermanentlyDefeatedRoutine());
+    }
+
+    public void ReviveAtSpawn()
+    {
+        StopAllCoroutines();
+        movementRoutine = null;
+        deadRoutine = null;
+        // Innovation revives this shared popped state after its cooldown.
+        IsPermanentlyDefeated = false;
+        enabled = true;
+        gameObject.SetActive(true);
+
+        Canvas worldCanvas = GetComponentInChildren<Canvas>(true);
+        if (worldCanvas != null)
+        {
+            worldCanvas.gameObject.SetActive(true);
+        }
+
+        if (animator != null)
+        {
+            animator.updateMode = AnimatorUpdateMode.Normal;
+            animator.Rebind();
+        }
+
+        ResetPosition();
+        ApplyState(GhostState.Normal);
+        if (animator != null)
+        {
+            animator.Update(0f);
+        }
+    }
+
+    public void SetHealth(int remainingHits)
+    {
+        Canvas worldCanvas = GetComponentInChildren<Canvas>(true);
+        if (worldCanvas == null)
+        {
+            return;
+        }
+
+        if (innovationHealthRoot == null || innovationHealthCells == null)
+        {
+            CreateInnovationHealth(worldCanvas);
+        }
+        if (innovationHealthRoot == null || innovationHealthCells == null) return;
+
+        int health = Mathf.Clamp(remainingHits, 0, 2);
+        innovationHealthRoot.SetActive(true);
+        Color32 cream = new Color32(255, 236, 174, 255);
+        Color32 darkBrown = new Color32(70, 38, 24, 255);
+        for (int i = 0; i < innovationHealthCells.Length; i++)
+        {
+            innovationHealthCells[i].color = i < health ? cream : darkBrown;
+        }
+    }
+
+    private void CreateInnovationHealth(Canvas worldCanvas)
+    {
+        RectTransform canvasRect = worldCanvas.GetComponent<RectTransform>();
+        if (canvasRect == null)
+        {
+            return;
+        }
+
+        innovationHealthRoot = new GameObject("InnovationHealth", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+        innovationHealthRoot.layer = worldCanvas.gameObject.layer;
+        RectTransform rootRect = innovationHealthRoot.GetComponent<RectTransform>();
+        rootRect.SetParent(canvasRect, false);
+        rootRect.anchorMin = new Vector2(0.5f, 0.5f);
+        rootRect.anchorMax = new Vector2(0.5f, 0.5f);
+        rootRect.pivot = new Vector2(0.5f, 0.5f);
+        rootRect.sizeDelta = new Vector2(14f, 6f);
+        TMPro.TextMeshProUGUI label = worldCanvas.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
+        Vector2 labelPosition = label != null ? label.rectTransform.anchoredPosition : Vector2.zero;
+        rootRect.anchoredPosition = labelPosition + new Vector2(0f, -11f);
+
+        UnityEngine.UI.Image background = innovationHealthRoot.GetComponent<UnityEngine.UI.Image>();
+        background.color = new Color32(70, 38, 24, 255);
+        background.raycastTarget = false;
+
+        innovationHealthCells = new UnityEngine.UI.Image[2];
+        for (int i = 0; i < innovationHealthCells.Length; i++)
+        {
+            GameObject cellObject = new GameObject("HealthCell" + (i + 1), typeof(RectTransform), typeof(UnityEngine.UI.Image));
+            cellObject.layer = worldCanvas.gameObject.layer;
+            RectTransform cellRect = cellObject.GetComponent<RectTransform>();
+            cellRect.SetParent(rootRect, false);
+            cellRect.anchorMin = new Vector2(0.5f, 0.5f);
+            cellRect.anchorMax = new Vector2(0.5f, 0.5f);
+            cellRect.pivot = new Vector2(0.5f, 0.5f);
+            cellRect.sizeDelta = new Vector2(5.5f, 5f);
+            cellRect.anchoredPosition = new Vector2(i == 0 ? -4f : 4f, 0f);
+            innovationHealthCells[i] = cellObject.GetComponent<UnityEngine.UI.Image>();
+            innovationHealthCells[i].raycastTarget = false;
+        }
+
+        rootRect.SetAsLastSibling();
     }
 
     private IEnumerator PermanentlyDefeatedRoutine()
