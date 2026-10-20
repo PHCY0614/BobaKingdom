@@ -1,26 +1,15 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class PelletController : MonoBehaviour
 {
-    private const int pelletScore = 10;
     private UIManager uiManager;
-
-    void Start()
-    {
-        uiManager = FindFirstObjectByType<UIManager>();
-    }
-    
+    private bool collected;
+    void Start() { uiManager = FindFirstObjectByType<UIManager>(); }
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (other.CompareTag("PacStudent"))
-        {
-            if (uiManager != null)
-            {
-                uiManager.AddScore(pelletScore);
-            }
-            Destroy(gameObject);
-        }
+        if (collected || !other.CompareTag("PacStudent") || uiManager == null || !uiManager.IsRoundRunning) return;
+        collected = true;
+        uiManager.CollectPellet(10);
+        Destroy(gameObject);
     }
 }

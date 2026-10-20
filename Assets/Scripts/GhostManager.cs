@@ -1,45 +1,83 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class GhostManager : MonoBehaviour
 {
-    private List<GhostController> allGhosts = new List<GhostController>();
-    void Awake()
+    private readonly List<GhostController> allGhosts = new List<GhostController>();
+
+    public bool HasDeadGhost
     {
-        allGhosts.AddRange(FindObjectsByType<GhostController>(FindObjectsSortMode.None)); 
+        get
+        {
+            foreach (GhostController ghost in allGhosts)
+            {
+                if (ghost != null && ghost.currentState == GhostState.Dead)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
-    
+
+    private void Awake()
+    {
+        RefreshGhostList();
+    }
+
     public void ChangeStateToScared()
     {
-        foreach (var ghost in allGhosts)
-        {
-            if (ghost != null)
-            {
-                ghost.SetState(GhostState.Scared);
-            }
-        }
+        ChangeState(GhostState.Scared);
     }
 
     public void ChangeStateToRecovering()
     {
-        foreach (var ghost in allGhosts)
-        {
-            if (ghost != null)
-            {
-                ghost.SetState(GhostState.Recovering);
-            }
-        }
+        ChangeState(GhostState.Recovering);
     }
 
     public void ChangeStateToNormal()
     {
-        foreach (var ghost in allGhosts)
+        ChangeState(GhostState.Normal);
+    }
+
+    public void ResetGhosts()
+    {
+        RefreshGhostList();
+        foreach (GhostController ghost in allGhosts)
         {
             if (ghost != null)
             {
-                ghost.SetState(GhostState.Normal);
+                ghost.ResetPosition();
             }
+        }
+        RefreshGhostMusic();
+    }
+
+    private void ChangeState(GhostState state)
+    {
+        RefreshGhostList();
+        foreach (GhostController ghost in allGhosts)
+        {
+            if (ghost != null)
+            {
+                ghost.SetState(state);
+            }
+        }
+        RefreshGhostMusic();
+    }
+
+    private void RefreshGhostList()
+    {
+        allGhosts.Clear();
+        allGhosts.AddRange(FindObjectsByType<GhostController>(FindObjectsSortMode.None));
+    }
+
+    private void RefreshGhostMusic()
+    {
+        AudioController audio = FindFirstObjectByType<AudioController>();
+        if (audio != null)
+        {
+            audio.RefreshGhostMusic();
         }
     }
 }

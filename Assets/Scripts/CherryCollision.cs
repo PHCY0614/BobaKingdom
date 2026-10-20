@@ -16,7 +16,7 @@ public class CherryCollision : MonoBehaviour
     
     void OnTriggerEnter2D(Collider2D other)
     {
-        if (other.CompareTag("PacStudent"))
+        if (other.CompareTag("PacStudent") && uiManager != null && uiManager.IsRoundRunning)
         {
             if (uiManager != null)
             {

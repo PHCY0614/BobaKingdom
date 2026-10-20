@@ -1,33 +1,16 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class PowerPillController : MonoBehaviour
 {
-    private const int POWER_PILL_SCORE = 50;
-    private const float SCARED_DURATION = 10.0f; 
     private UIManager uiManager;
-
-    void Start()
+    private bool collected;
+    void Start() { uiManager = FindFirstObjectByType<UIManager>(); }
+    private void OnTriggerEnter2D(Collider2D other)
     {
-        uiManager = FindFirstObjectByType<UIManager>();
-    }
-    
-    void OnTriggerEnter2D(Collider2D other)
-    {
-        if (other.CompareTag("PacStudent"))
-        {
-            if (uiManager != null)
-            {
-                uiManager.AddScore(POWER_PILL_SCORE);
-            }
-
-            if (uiManager != null)
-            {
-                uiManager.StartScaredTimer(SCARED_DURATION);
-            }
-
-            Destroy(gameObject);
-        }
+        if (collected || !other.CompareTag("PacStudent") || uiManager == null || !uiManager.IsRoundRunning) return;
+        collected = true;
+        uiManager.StartScaredTimer(10f);
+        uiManager.CollectPellet(50);
+        Destroy(gameObject);
     }
 }
