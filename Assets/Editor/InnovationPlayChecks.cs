@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -32,6 +32,11 @@ public static class InnovationPlayChecks
     private static int defeatLosses;
     private static bool defeatMode;
     private static bool cooldownProbePending;
+    private static int goldenRushStage;
+    private static double goldenRushStartedAt;
+    private static float pausedGoldenRush;
+    private static float pausedRoundTimer;
+    private static bool goldenRushCaptured;
     private static bool timerFreezeChecked;
     private static bool menuCaptured;
     private static float stoppedTimer;
@@ -73,7 +78,8 @@ public static class InnovationPlayChecks
         {
             defeatMode = SessionState.GetBool(Flag + ".Defeat", false);
             passed.Clear(); stage = 0; defeatLosses = 0;
-            cooldownProbePending = false; timerFreezeChecked = false; menuCaptured = false;
+            cooldownProbePending = false; goldenRushStage = 0; timerFreezeChecked = false; menuCaptured = false;
+            goldenRushStartedAt = 0d; pausedGoldenRush = 0f; pausedRoundTimer = 0f; goldenRushCaptured = false;
             deathSprites.Clear();
             started = stageStarted = EditorApplication.timeSinceStartup;
             Application.runInBackground = true;
@@ -178,6 +184,28 @@ public static class InnovationPlayChecks
         return property == null ? null : property.objectReferenceValue as TMP_Text;
     }
 
+    private static Material InnovationMaterial(string field)
+    {
+        if (innovation == null) return null;
+        SerializedProperty property = new SerializedObject(innovation).FindProperty(field);
+        return property == null ? null : property.objectReferenceValue as Material;
+    }
+
+    private static void CheckGoldenRushStatus(bool active)
+    {
+        TMP_Text status = InnovationText("shotStatusText");
+        Check(status != null, "Shot status text is assigned for Golden Rush");
+        status.ForceMeshUpdate();
+        Check(!status.isTextOverflowing, "Golden Rush shot instructions fit without overflow");
+        string text = status.text.ToUpperInvariant();
+        if (active)
+            Check(text.Contains("GOLDEN RUSH") && text.Contains("HOLD SPACE"),
+                "Golden Rush HUD shows the empowered hold-space instructions");
+        else
+            Check(!text.Contains("GOLDEN RUSH") && text.Contains("SPACE"),
+                "Shot HUD returns to the normal ready or cooldown instructions");
+    }
+
     private static TMP_Text UIText(string field)
     {
         if (ui == null) return null;
@@ -240,6 +268,8 @@ public static class InnovationPlayChecks
             "Countdown gives all four ghosts two hits");
         Check(innovation.CooldownRemaining == 0f && innovation.ActiveShotCount == 0,
             "Countdown starts with a ready shot and no active projectiles");
+        Check(!innovation.IsGoldenRushActive && innovation.GoldenRushRemaining == 0f,
+            "Countdown starts without Golden Rush");
         Check(!innovation.TryShoot() && innovation.ActiveShotCount == 0,
             "Shooting is blocked during countdown");
         CheckHudLayout(false);
@@ -273,40 +303,44 @@ public static class InnovationPlayChecks
     private static void CheckShootingAndCollectibles(double now)
     {
         if (ui.State != UIManager.RoundState.Running) return;
-        if (!cooldownProbePending)
+        if (goldenRushStage == 0)
         {
-            Check(innovation.TryShoot(), "Running allows a shot");
-            Check(innovation.CooldownRemaining == 3f && innovation.ActiveShotCount == 1,
-                "A shot starts a three second cooldown");
-            Check(!innovation.TryShoot() && innovation.ActiveShotCount == 1,
-                "A second shot is blocked during cooldown");
-            ui.SetGamePaused(false);
-            cooldownProbePending = true;
-            stageStarted = now;
-            return;
+            if (!cooldownProbePending)
+            {
+                Check(innovation.TryShoot(), "Running allows a shot");
+                Check(innovation.CooldownRemaining == 3f && innovation.ActiveShotCount == 1,
+                    "A shot starts a three second cooldown");
+                Check(!innovation.TryShoot() && innovation.ActiveShotCount == 1,
+                    "A second shot is blocked during cooldown");
+                ui.SetGamePaused(false);
+                cooldownProbePending = true;
+                stageStarted = now;
+                return;
+            }
+            if (now - stageStarted < 0.5) return;
+            Check(innovation.CooldownRemaining < 2.7f && innovation.CooldownRemaining > 2.1f,
+                "The running cooldown decreases with real elapsed time");
+            ui.SetGamePaused(true);
+            cooldownProbePending = false;
+            innovation.ClearShots();
+            int score = ui.CurrentScore;
+            float cooldownBeforePearl = innovation.CooldownRemaining;
+            ui.CollectPellet(10);
+            Check(ui.CurrentScore == score + 10 && Mathf.Abs(innovation.CooldownRemaining - (cooldownBeforePearl - 0.25f)) < 0.001f,
+                "A normal pearl scores ten and shortens cooldown by 0.25 seconds");
+            score = ui.CurrentScore;
+            ui.StartScaredTimer(10f);
+            ui.CollectPellet(50);
+            Check(ui.CurrentScore == score + 50 && innovation.CooldownRemaining == 0f,
+                "A large pearl scores fifty and refills the shot");
+            Check(ui.GetScaredTimeRemaining() == 0f && ghosts.All(ghost => ghost.currentState == GhostState.Normal),
+                "Innovation pearls never activate Scared ghosts");
+            int remaining = ui.RemainingPellets;
+            for (int i = 0; i < remaining; i++) ui.CollectPellet(10);
+            Check(ui.State == UIManager.RoundState.Running && ui.RemainingPellets == 0,
+                "Collecting every pellet does not win Innovation mode");
         }
-        if (now - stageStarted < 0.5) return;
-        Check(innovation.CooldownRemaining < 2.7f && innovation.CooldownRemaining > 2.1f,
-            "The running cooldown decreases with real elapsed time");
-        ui.SetGamePaused(true);
-        cooldownProbePending = false;
-        innovation.ClearShots();
-        int score = ui.CurrentScore;
-        float cooldownBeforePearl = innovation.CooldownRemaining;
-        ui.CollectPellet(10);
-        Check(ui.CurrentScore == score + 10 && Mathf.Abs(innovation.CooldownRemaining - (cooldownBeforePearl - 0.25f)) < 0.001f,
-            "A normal pearl scores ten and shortens cooldown by 0.25 seconds");
-        score = ui.CurrentScore;
-        ui.StartScaredTimer(10f);
-        ui.CollectPellet(50);
-        Check(ui.CurrentScore == score + 50 && innovation.CooldownRemaining == 0f,
-            "A large pearl scores fifty and refills the shot");
-        Check(ui.GetScaredTimeRemaining() == 0f && ghosts.All(ghost => ghost.currentState == GhostState.Normal),
-            "Innovation pearls never activate Scared ghosts");
-        int remaining = ui.RemainingPellets;
-        for (int i = 0; i < remaining; i++) ui.CollectPellet(10);
-        Check(ui.State == UIManager.RoundState.Running && ui.RemainingPellets == 0,
-            "Collecting every pellet does not win Innovation mode");
+        if (!CheckGoldenRush(now)) return;
         if (defeatMode)
         {
             Next(now);
@@ -314,6 +348,103 @@ public static class InnovationPlayChecks
             return;
         }
         Next(now);
+    }
+
+    private static bool CheckGoldenRush(double now)
+    {
+        if (goldenRushStage == 0)
+        {
+            innovation.ClearShots();
+            int score = ui.CurrentScore;
+            innovation.CollectPearl(50);
+            Check(ui.CurrentScore == score && innovation.IsGoldenRushActive
+                && innovation.GoldenRushRemaining > 5.8f && innovation.GoldenRushRemaining <= 6.05f,
+                "A large pearl starts a six second Golden Rush without extra score");
+            Material goldenMaterial = InnovationMaterial("goldenPearlMaterial");
+            Check(goldenMaterial != null && goldenMaterial.shader != null && goldenMaterial.shader.isSupported,
+                "Golden pearl material is assigned with a supported shader");
+            Check(innovation.TryShoot(), "Golden Rush allows the first empowered shot");
+            PearlShot shot = UnityEngine.Object.FindFirstObjectByType<PearlShot>();
+            Check(shot != null, "Golden Rush creates a PearlShot");
+            SpriteRenderer renderer = shot.GetComponent<SpriteRenderer>();
+            TrailRenderer trail = shot.GetComponent<TrailRenderer>();
+            Check(renderer != null && renderer.sharedMaterial == goldenMaterial,
+                "Golden Rush shot uses the golden material");
+            Check(renderer != null && renderer.transform.localScale.x > 0.75f,
+                "Golden Rush shot uses the larger projectile scale");
+            Check(trail != null && trail.enabled && trail.emitting && trail.sharedMaterial == goldenMaterial
+                && trail.startWidth > 0.08f, "Golden Rush shot uses an active larger golden trail");
+            shot.Advance(0.1f); Physics2D.SyncTransforms();
+            goldenRushStartedAt = now; goldenRushStage = 1;
+            return false;
+        }
+        if (goldenRushStage == 1)
+        {
+            if (now - goldenRushStartedAt < 0.05) return false;
+            PearlShot shot = UnityEngine.Object.FindFirstObjectByType<PearlShot>();
+            Check(shot != null && shot.gameObject.activeInHierarchy,
+                "Golden Rush screenshot keeps the empowered shot visible after a render frame");
+            CheckGoldenRushStatus(true);
+            if (!goldenRushCaptured)
+            {
+                float beforeRefresh = innovation.GoldenRushRemaining;
+                innovation.CollectPearl(50);
+                Check(innovation.GoldenRushRemaining <= 6.05f
+                    && innovation.GoldenRushRemaining >= beforeRefresh - 0.01f,
+                    "A second large pearl refreshes Golden Rush without stacking its timer");
+                Capture("golden-rush.png");
+                goldenRushCaptured = true;
+                return false;
+            }
+            innovation.ClearShots();
+            ui.SetGamePaused(false);
+            goldenRushStartedAt = now; goldenRushStage = 2;
+            return false;
+        }
+        if (goldenRushStage == 2)
+        {
+            if (now - goldenRushStartedAt < 0.65) return false;
+            Check(innovation.IsGoldenRushActive, "Golden Rush remains active before its expiry window");
+            CheckGoldenRushStatus(true);
+            int score = ui.CurrentScore;
+            Check(innovation.TryShoot(), "Golden Rush permits a second shot after 0.65 seconds");
+            Check(Mathf.Abs(innovation.CooldownRemaining - 0.6f) < 0.02f,
+                "Golden Rush sets the empowered shot cooldown to 0.6 seconds");
+            Check(ui.CurrentScore == score, "An empty Golden Rush shot does not add score");
+            innovation.ClearShots();
+            ui.SetGamePaused(true);
+            pausedGoldenRush = innovation.GoldenRushRemaining;
+            pausedRoundTimer = ui.ElapsedTime;
+            goldenRushStartedAt = now; goldenRushStage = 3;
+            return false;
+        }
+        if (goldenRushStage == 3)
+        {
+            if (now - goldenRushStartedAt < 0.5) return false;
+            Check(Mathf.Abs(innovation.GoldenRushRemaining - pausedGoldenRush) < 0.001f
+                && Mathf.Abs(ui.ElapsedTime - pausedRoundTimer) < 0.001f,
+                "Pausing the running round freezes Golden Rush and the round timer");
+            ui.SetGamePaused(false);
+            goldenRushStartedAt = now; goldenRushStage = 4;
+            return false;
+        }
+        if (goldenRushStage == 4)
+        {
+            if (innovation.IsGoldenRushActive) return false;
+            Check(innovation.GoldenRushRemaining <= 0.001f, "Golden Rush expires after six seconds");
+            CheckGoldenRushStatus(false);
+            Check(innovation.TryShoot(), "Normal shooting returns after Golden Rush expires");
+            Check(Mathf.Abs(innovation.CooldownRemaining - 3f) < 0.02f,
+                "Normal shooting returns to a three second cooldown");
+            innovation.ClearShots();
+            goldenRushStartedAt = now; goldenRushStage = 5;
+            return false;
+        }
+        if (now - goldenRushStartedAt < 3.1) return false;
+        Check(innovation.CooldownRemaining <= 0.001f && !innovation.IsGoldenRushActive,
+            "The normal cooldown is ready before the wall test");
+        ui.SetGamePaused(true);
+        return true;
     }
 
     private static void CheckWallBlock(double now)
@@ -378,11 +509,14 @@ public static class InnovationPlayChecks
         PositionGhost(ghosts[1], new Vector3(14, -1, 0));
         innovation.CollectPearl(50); innovation.TryShoot();
         Check(innovation.ActiveShotCount == 1, "An active projectile exists before player death");
+        Check(innovation.IsGoldenRushActive && innovation.GoldenRushRemaining > 0f,
+            "Player death is tested while Golden Rush is active");
         ui.LoseLife();
         Check(ui.State == UIManager.RoundState.Death && ui.CurrentLives == 2,
             "Player death removes one life and pauses the round");
-        Check(innovation.ActiveShotCount == 0 && !innovation.TryShoot(),
-            "Death clears projectiles and blocks shooting");
+        Check(innovation.ActiveShotCount == 0 && !innovation.IsGoldenRushActive
+            && innovation.GoldenRushRemaining <= 0.001f && !innovation.TryShoot(),
+            "Death clears projectiles, cancels Golden Rush, and blocks shooting");
         stageStarted = now; stage++;
     }
 
@@ -396,6 +530,8 @@ public static class InnovationPlayChecks
         Check(innovation.DefeatedCount == 1 && innovation.GetRemainingHits(ghosts[1]) == 1
             && innovation.ActiveShotCount == 0 && innovation.CooldownRemaining == 0f,
             "Respawn preserves defeated and injured progress while resetting the shot");
+        Check(!innovation.IsGoldenRushActive && innovation.GoldenRushRemaining <= 0.001f,
+            "Respawn keeps Golden Rush cancelled");
         Check(ui.GetScaredTimeRemaining() == 0f, "Respawn keeps the Innovation scared timer inactive");
         ui.SetGamePaused(true);
         DefeatGhost(ghosts[1], false);
