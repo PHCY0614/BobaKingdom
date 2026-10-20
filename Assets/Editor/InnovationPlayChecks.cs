@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
@@ -19,7 +20,7 @@ public static class InnovationPlayChecks
     private const string Level2TimeKey = "PacStudent.InnovationScene.BestTime";
     private const int InitialLives = 3;
     private const int TargetHits = 2;
-    private const double TimeoutSeconds = 90d;
+    private const double TimeoutSeconds = 120d;
 
     private static readonly List<string> passed = new List<string>();
     private static UIManager ui;
@@ -31,7 +32,7 @@ public static class InnovationPlayChecks
     private static int stage;
     private static int defeatLosses;
     private static bool defeatMode;
-    private static bool ghostsFirstMode;
+    private static bool noPopsMode;
     private static bool cooldownProbePending;
     private static int goldenRushStage;
     private static double goldenRushStartedAt;
@@ -41,10 +42,19 @@ public static class InnovationPlayChecks
     private static float goldenRushCooldownBeforeSecond;
     private static bool goldenRushRechargeStarted;
     private static bool goldenRushCaptured;
+    private static bool firstHitCaptured;
+    private static bool deathRespawnFrozenChecked;
+    private static float deathPausedRespawn;
+    private static float pausedRespawn;
+    private static Vector3 revivedSpawnPosition;
+    private static double respawnStartedAt;
+    private static int respawnStage;
     private static bool timerFreezeChecked;
     private static bool menuCaptured;
     private static float stoppedTimer;
     private static readonly Dictionary<int, HashSet<string>> deathSprites = new Dictionary<int, HashSet<string>>();
+    private static readonly Dictionary<int, Vector3> ghostSpawns = new Dictionary<int, Vector3>();
+    private static readonly Dictionary<int, Color> ghostColours = new Dictionary<int, Color>();
 
     static InnovationPlayChecks() { EditorApplication.playModeStateChanged += OnPlayModeChanged; }
 
@@ -54,8 +64,8 @@ public static class InnovationPlayChecks
     [MenuItem("PacStudent/Run Innovation defeat Play Mode checks")]
     public static void StartDefeatCheck() { Begin(true); }
 
-    [MenuItem("PacStudent/Run Innovation ghosts-first Play Mode checks")]
-    public static void StartGhostsFirstCheck() { Begin(false, true); }
+    [MenuItem("PacStudent/Run Innovation no-pops Play Mode checks")]
+    public static void StartNoPopsCheck() { Begin(false, true); }
 
     private static void Begin(bool defeat) { Begin(defeat, false); }
 
@@ -64,11 +74,11 @@ public static class InnovationPlayChecks
         if (EditorApplication.isPlaying || SceneManager.GetActiveScene().name != "InnovationScene")
             throw new InvalidOperationException("Open InnovationScene outside Play Mode before running checks.");
         defeatMode = defeat;
-        ghostsFirstMode = ghostsFirst;
+        noPopsMode = ghostsFirst;
         SaveRecordSnapshot("Level1", Level1ScoreKey, Level1TimeKey);
         SaveRecordSnapshot("Level2", Level2ScoreKey, Level2TimeKey);
         SessionState.SetBool(Flag + ".Defeat", defeat);
-        SessionState.SetBool(Flag + ".GhostsFirst", ghostsFirst);
+        SessionState.SetBool(Flag + ".NoPops", ghostsFirst);
         SessionState.SetBool(Flag, true);
         WriteReport("RUNNING");
         EditorApplication.isPlaying = true;
@@ -88,12 +98,16 @@ public static class InnovationPlayChecks
         if (change == PlayModeStateChange.EnteredPlayMode)
         {
             defeatMode = SessionState.GetBool(Flag + ".Defeat", false);
-            ghostsFirstMode = SessionState.GetBool(Flag + ".GhostsFirst", false);
+            noPopsMode = SessionState.GetBool(Flag + ".NoPops", false);
             passed.Clear(); stage = 0; defeatLosses = 0;
             cooldownProbePending = false; goldenRushStage = 0; timerFreezeChecked = false; menuCaptured = false;
             goldenRushStartedAt = 0d; pausedGoldenRush = 0f; pausedRoundTimer = 0f; pausedCooldown = 0f;
             goldenRushCooldownBeforeSecond = 0f; goldenRushRechargeStarted = false; goldenRushCaptured = false;
+            deathPausedRespawn = 0f; pausedRespawn = 0f; revivedSpawnPosition = Vector3.zero;
+            respawnStartedAt = 0d; respawnStage = 0;
+            firstHitCaptured = false; deathRespawnFrozenChecked = false;
             deathSprites.Clear();
+            ghostSpawns.Clear(); ghostColours.Clear();
             started = stageStarted = EditorApplication.timeSinceStartup;
             Application.runInBackground = true;
             EditorApplication.update -= Tick; EditorApplication.update += Tick;
@@ -116,7 +130,7 @@ public static class InnovationPlayChecks
         try
         {
             double now = EditorApplication.timeSinceStartup;
-            if (now - started > TimeoutSeconds) throw new Exception("Innovation checks exceeded 90 seconds.");
+            if (now - started > TimeoutSeconds) throw new Exception("Innovation checks exceeded 120 seconds.");
             CacheObjects();
             ObserveDeathSprites();
             if (stage == 0) CheckCountdown(now);
@@ -129,6 +143,7 @@ public static class InnovationPlayChecks
             else if (stage == 7) CheckMenuAfterRound(now);
             else if (stage == 8) CheckLevel2Restart(now);
             else if (stage == 9) CheckMainMenuReturn(now);
+            else if (noPopsMode && stage == 11) CheckNoPopsVictory(now);
             else if (defeatMode && stage == 10) CheckDefeatRound(now);
             else if (defeatMode && stage == 11) CheckDefeatMenu(now);
         }
@@ -315,12 +330,17 @@ public static class InnovationPlayChecks
         {
             ghost.ResetPosition();
             ghost.enabled = false;
+            int number = GhostNumber(ghost);
+            ghostSpawns[number] = ghost.transform.position;
+            SpriteRenderer renderer = ghost.GetComponent<SpriteRenderer>();
+            if (renderer != null) ghostColours[number] = renderer.color;
         }
         Physics2D.SyncTransforms();
         ui.SetGamePaused(true);
         Check(player.transform.position == new Vector3(1, -1, 0), "Running test uses the player spawn position");
         Check(ghosts.Length == 4 && ghosts.All(ghost => innovation.GetRemainingHits(ghost) == TargetHits),
             "Running keeps all target hit counts intact");
+        CheckInnovationHealth(ghosts[0], 2);
         CheckHudLayout(true);
         Capture("running.png");
         Next(now);
@@ -369,23 +389,15 @@ public static class InnovationPlayChecks
                 "A large pearl scores fifty and refills two Golden Rush shots");
             Check(ui.GetScaredTimeRemaining() == 0f && ghosts.All(ghost => ghost.currentState == GhostState.Normal),
                 "Innovation pearls never activate Scared ghosts");
-            if (!ghostsFirstMode)
-            {
-                int remaining = ui.RemainingPellets;
-                for (int i = 0; i < remaining; i++) ui.CollectPellet(10);
-                Check(ui.State == UIManager.RoundState.Running && ui.RemainingPellets == 0,
-                    "Collecting every pellet does not win Innovation mode");
-            }
-            else
-            {
-                Check(ui.State == UIManager.RoundState.Running && ui.RemainingPellets > 0,
-                    "Ghosts-first mode keeps the round running with pearls remaining");
-            }
-            ui.CompleteInnovation();
-            Check(ui.State == UIManager.RoundState.Running && innovation.DefeatedCount < innovation.TotalTargets,
-                "Completing Innovation early cannot win before all four ghosts are popped");
+            Check(ui.State == UIManager.RoundState.Running && ui.RemainingPellets > 0,
+                noPopsMode ? "No-pops mode keeps pearls for the final victory" : "Pearls remain for the final victory");
         }
         if (!CheckGoldenRush(now)) return;
+        if (noPopsMode)
+        {
+            stage = 11; stageStarted = now;
+            return;
+        }
         if (defeatMode)
         {
             Next(now);
@@ -550,13 +562,10 @@ public static class InnovationPlayChecks
                 && innovation.ShotCharges <= 1 && innovation.CooldownRemaining < pausedCooldown - 0.1f,
                 "Golden Rush expires at one charge without granting or resetting recharge");
             CheckGoldenRushStatus(false, innovation.ShotCharges, 1, innovation.CooldownRemaining > 0.001f);
-            if (innovation.ShotCharges < 1)
-            {
-                if (innovation.CooldownRemaining > 0.001f) return false;
-                Check(innovation.ShotCharges == 1 && innovation.ShotCapacity == 1,
-                    "The normal single charge returns after its existing recharge");
-                CheckGoldenRushStatus(false, 1, 1);
-            }
+            if (innovation.ShotCharges < 1) return false;
+            Check(innovation.ShotCharges == 1 && innovation.ShotCapacity == 1,
+                "The normal single charge returns after its existing recharge");
+            CheckGoldenRushStatus(false, 1, 1);
             int score = ui.CurrentScore;
             float cooldownBeforeNormal = innovation.CooldownRemaining;
             Check(innovation.TryShoot() && innovation.ShotCharges == 0,
@@ -625,14 +634,22 @@ public static class InnovationPlayChecks
     private static void CheckFirstHit(double now)
     {
         if (ui.State != UIManager.RoundState.Running) return;
-        PositionGhost(ghosts[0], new Vector3(4, -1, 0));
-        innovation.CollectPearl(50);
-        Check(innovation.TryShoot(), "A refilled shot can target a ghost");
-        PearlShot shot = UnityEngine.Object.FindFirstObjectByType<PearlShot>();
-        Check(shot != null, "Hit test creates a PearlShot");
-        shot.Advance(0.4f); Physics2D.SyncTransforms();
-        Check(innovation.GetRemainingHits(ghosts[0]) == 1 && !ghosts[0].IsPermanentlyDefeated,
-            "The first ghost hit injures without popping");
+        PearlShot shot;
+        if (!firstHitCaptured)
+        {
+            PositionGhost(ghosts[0], new Vector3(4, -1, 0));
+            innovation.CollectPearl(50);
+            Check(innovation.TryShoot(), "A refilled shot can target a ghost");
+            shot = UnityEngine.Object.FindFirstObjectByType<PearlShot>();
+            Check(shot != null, "Hit test creates a PearlShot");
+            shot.Advance(0.4f); Physics2D.SyncTransforms();
+            Check(innovation.GetRemainingHits(ghosts[0]) == 1 && !ghosts[0].IsPermanentlyDefeated,
+                "The first ghost hit injures without popping");
+            CheckInnovationHealth(ghosts[0], 1);
+            Capture("health-injured.png");
+            firstHitCaptured = true;
+            return;
+        }
         int score = ui.CurrentScore;
         innovation.CollectPearl(50);
         Check(innovation.TryShoot(), "The second ghost hit can be fired after refill");
@@ -640,8 +657,12 @@ public static class InnovationPlayChecks
         Check(shot != null, "Second hit creates a PearlShot");
         shot.Advance(0.4f); Physics2D.SyncTransforms();
         Check(innovation.GetRemainingHits(ghosts[0]) == 0 && ghosts[0].IsPermanentlyDefeated
-            && !ghosts[0].GetComponent<Collider2D>().enabled && innovation.DefeatedCount == 1,
-            "Two hits permanently pop one ghost and disable its collider");
+            && !ghosts[0].GetComponent<Collider2D>().enabled,
+            "Two hits temporarily pop one ghost and disable its collider");
+        CheckInnovationHealth(ghosts[0], 0);
+        Check(innovation.GetRespawnRemaining(ghosts[0]) > 9.5f
+            && innovation.GetRespawnRemaining(ghosts[0]) <= 10.05f,
+            "A popped ghost starts a ten second respawn countdown");
         Check(ui.CurrentScore == score + 300, "A popped ghost awards 300 points once");
         innovation.CollectPearl(50);
         score = ui.CurrentScore;
@@ -649,9 +670,9 @@ public static class InnovationPlayChecks
         shot = UnityEngine.Object.FindFirstObjectByType<PearlShot>();
         Check(shot != null, "Duplicate hit probe creates a PearlShot");
         shot.Advance(0.4f); Physics2D.SyncTransforms();
-        Check(ui.CurrentScore == score && innovation.DefeatedCount == 1
+        Check(ui.CurrentScore == score
             && innovation.GetRemainingHits(ghosts[0]) == 0,
-            "Repeated hits on a permanently popped ghost do not add score");
+            "Repeated hits on a popped ghost do not add score");
         innovation.ClearShots();
         Next(now);
     }
@@ -666,75 +687,200 @@ public static class InnovationPlayChecks
         Check(shot != null, "Injury shot creates a PearlShot");
         shot.Advance(0.4f); Physics2D.SyncTransforms();
         Check(innovation.GetRemainingHits(ghosts[1]) == 1, "The second ghost keeps one hit after injury");
+        CheckInnovationHealth(ghosts[1], 1);
         PositionGhost(ghosts[1], new Vector3(14, -1, 0));
         innovation.CollectPearl(50); innovation.TryShoot();
         Check(innovation.ActiveShotCount == 1, "An active projectile exists before player death");
         Check(innovation.IsGoldenRushActive && innovation.GoldenRushRemaining > 0f,
             "Player death is tested while Golden Rush is active");
+        deathPausedRespawn = innovation.GetRespawnRemaining(ghosts[0]);
         ui.LoseLife();
         Check(ui.State == UIManager.RoundState.Death && ui.CurrentLives == 2,
             "Player death removes one life and pauses the round");
         Check(innovation.ActiveShotCount == 0 && !innovation.IsGoldenRushActive
-            && innovation.GoldenRushRemaining <= 0.001f && !innovation.TryShoot(),
+            && innovation.GoldenRushRemaining <= 0.001f && !innovation.TryShoot()
+            && Mathf.Abs(innovation.GetRespawnRemaining(ghosts[0]) - deathPausedRespawn) < 0.001f,
             "Death clears projectiles, cancels Golden Rush, and blocks shooting");
         stageStarted = now; stage++;
     }
 
     private static void CheckRemainingTargets(double now)
     {
-        if (ui.State != UIManager.RoundState.Running || stageStarted + 2.1 > EditorApplication.timeSinceStartup) return;
-        Check(ui.CurrentLives == 2 && player.transform.position == new Vector3(1, -1, 0),
-            "Respawn preserves the second life and player position");
-        Check(ghosts[0].IsPermanentlyDefeated && !ghosts[0].gameObject.activeSelf,
-            "A permanently popped ghost does not revive after death");
-        Check(innovation.DefeatedCount == 1 && innovation.GetRemainingHits(ghosts[1]) == 1
-            && innovation.ActiveShotCount == 0 && innovation.CooldownRemaining == 0f
-            && innovation.ShotCapacity == 1 && innovation.ShotCharges == 1,
-            "Respawn preserves defeated and injured progress while resetting the shot");
-        Check(!innovation.IsGoldenRushActive && innovation.GoldenRushRemaining <= 0.001f,
-            "Respawn keeps Golden Rush cancelled");
-        Check(ui.GetScaredTimeRemaining() == 0f, "Respawn keeps the Innovation scared timer inactive");
-        ui.SetGamePaused(true);
-        DefeatGhost(ghosts[1], false);
-        DefeatGhost(ghosts[2], true);
-        DefeatGhost(ghosts[3], true);
-        Check(innovation.DefeatedCount == innovation.TotalTargets,
-            "All four ghosts are popped before the final pearl test");
-        if (ghostsFirstMode)
+        if (ui.State == UIManager.RoundState.Death)
         {
-            Check(ui.State == UIManager.RoundState.Running && ui.RemainingPellets > 0,
-                "Popping all ghosts first keeps the round running with pearls remaining");
+            if (!deathRespawnFrozenChecked)
+            {
+                Check(Mathf.Abs(innovation.GetRespawnRemaining(ghosts[0]) - deathPausedRespawn) < 0.05f,
+                    "Player death keeps the popped ghost respawn countdown frozen");
+                deathRespawnFrozenChecked = true;
+            }
+            return;
+        }
+        if (respawnStage == 0)
+        {
+            if (ui.State != UIManager.RoundState.Running) return;
+            Check(ui.CurrentLives == 2 && player.transform.position == new Vector3(1, -1, 0),
+                "Respawn preserves the second life and player position");
+            Check(ghosts[0].IsPermanentlyDefeated && !ghosts[0].gameObject.activeSelf,
+                "A popped ghost remains down during the player death countdown");
+            float runningRespawn = innovation.GetRespawnRemaining(ghosts[0]);
+            Check(runningRespawn <= deathPausedRespawn && runningRespawn > deathPausedRespawn - 0.2f,
+                "The popped ghost respawn countdown resumes after player death");
+            Check(innovation.GetRemainingHits(ghosts[1]) == 1
+                && innovation.ActiveShotCount == 0 && innovation.CooldownRemaining == 0f
+                && innovation.ShotCapacity == 1 && innovation.ShotCharges == 1,
+                "Respawn preserves injured progress while resetting the shot");
+            Check(!innovation.IsGoldenRushActive && innovation.GoldenRushRemaining <= 0.001f,
+                "Respawn keeps Golden Rush cancelled");
+            Check(ui.GetScaredTimeRemaining() == 0f, "Respawn keeps the Innovation scared timer inactive");
+            pausedRespawn = innovation.GetRespawnRemaining(ghosts[0]);
+            ui.SetGamePaused(true);
+            respawnStartedAt = now; respawnStage = 1;
+            return;
+        }
+        if (respawnStage == 1)
+        {
+            if (now - respawnStartedAt < 0.5) return;
+            Check(Mathf.Abs(innovation.GetRespawnRemaining(ghosts[0]) - pausedRespawn) < 0.001f,
+                "Pausing the round freezes the ghost respawn countdown");
+            ui.SetGamePaused(false);
+            respawnStartedAt = now; respawnStage = 2;
+            return;
+        }
+        if (respawnStage == 2)
+        {
+            if (ghosts[0].IsPermanentlyDefeated) return;
+            Check(innovation.GetRespawnRemaining(ghosts[0]) <= 0.001f,
+                "A ghost revives after ten seconds of running time");
+            CheckRevivedGhost(ghosts[0]);
+            Capture("respawn.png");
+            revivedSpawnPosition = ghosts[0].transform.position;
+            respawnStartedAt = now; respawnStage = 3;
+            return;
+        }
+        if (respawnStage == 3)
+        {
+            if (now - respawnStartedAt < 0.5) return;
+            Check(Vector3.Distance(ghosts[0].transform.position, revivedSpawnPosition) > 0.01f,
+                "A revived ghost resumes movement");
+            ui.SetGamePaused(true);
+            DefeatGhost(ghosts[0], true, false);
+            Check(innovation.GetRespawnRemaining(ghosts[0]) > 9.5f,
+                "A revived ghost starts a fresh respawn countdown when popped again");
+            DefeatGhost(ghosts[1], false, true);
+            DefeatGhost(ghosts[2], true, true);
+            DefeatGhost(ghosts[3], true, true);
+            Check(PoppedCount() == 4 && ui.State == UIManager.RoundState.Running && ui.RemainingPellets > 0,
+                "All ghosts can be down while the round still waits for pearls");
             int remaining = ui.RemainingPellets;
             for (int i = 1; i < remaining; i++) ui.CollectPellet(10);
             Check(ui.State == UIManager.RoundState.Running && ui.RemainingPellets == 1,
-                "Ghosts-first mode keeps running until its final pearl");
-            ui.CompleteInnovation();
-            Check(ui.State == UIManager.RoundState.Running,
-                "CompleteInnovation still waits for the final pearl");
+                "The round stays running until its final pearl");
             int scoreBeforeFinalPearl = ui.CurrentScore;
             ui.CollectPellet(10);
             Check(ui.State == UIManager.RoundState.GameOver && ui.RemainingPellets == 0,
-                "The final pearl completes the ghosts-first round");
-            Check(ui.CurrentScore == scoreBeforeFinalPearl + 10,
-                "The final pearl is scored once");
+                "The final pearl completes the round");
+            Check(ui.CurrentScore == scoreBeforeFinalPearl + 10, "The final pearl is scored once");
+            CheckNoRespawnAfterGameOver();
+            int scoreAfterCompletion = ui.CurrentScore;
+            ui.CollectPellet(10);
+            Check(ui.State == UIManager.RoundState.GameOver && ui.CurrentScore == scoreAfterCompletion,
+                "Repeated collection after GameOver cannot score or restart the round");
+            TMP_Text details = RoundDetails();
+            Check(details != null && details.text == "All pearls collected",
+                "Innovation victory uses the all pearls collected reason");
+            CheckResultOverlay(ui, true, details.text);
+            stoppedTimer = ui.ElapsedTime;
+            Capture("victory.png");
+            Next(now);
         }
-        else
-        {
-            Check(ui.State == UIManager.RoundState.GameOver,
-                "All four popped ghosts complete the cleared-pearl round");
-        }
+    }
+
+    private static void CheckNoPopsVictory(double now)
+    {
+        if (ui.State != UIManager.RoundState.Running) return;
+        Check(PoppedCount() == 0 && ui.RemainingPellets > 0,
+            "No-pops mode keeps every ghost alive before collecting pearls");
+        int remaining = ui.RemainingPellets;
+        for (int i = 1; i < remaining; i++) ui.CollectPellet(10);
+        Check(ui.State == UIManager.RoundState.Running && ui.RemainingPellets == 1,
+            "No-pops mode stays running until its final pearl");
+        int scoreBeforeFinalPearl = ui.CurrentScore;
+        ui.CollectPellet(10);
+        Check(ui.State == UIManager.RoundState.GameOver && ui.RemainingPellets == 0
+            && PoppedCount() == 0, "Only the final pearl completes the no-pops round");
+        Check(ui.CurrentScore == scoreBeforeFinalPearl + 10, "No-pops final pearl is scored once");
         int scoreAfterCompletion = ui.CurrentScore;
         ui.CollectPellet(10);
-        ui.CompleteInnovation();
         Check(ui.State == UIManager.RoundState.GameOver && ui.CurrentScore == scoreAfterCompletion,
-            "Repeated completion requests cannot score or restart the round");
+            "No-pops collection after GameOver cannot score or restart the round");
         TMP_Text details = RoundDetails();
-        Check(details != null && details.text == "All pearls collected. All four popped.",
-            "Innovation victory requires all pearls and all four popped ghosts");
+        Check(details != null && details.text == "All pearls collected",
+            "No-pops victory uses the all pearls collected reason");
         CheckResultOverlay(ui, true, details.text);
         stoppedTimer = ui.ElapsedTime;
-        Capture("victory.png");
+        Capture("victory-no-pops.png");
+        stage = 6;
         Next(now);
+    }
+
+    private static int PoppedCount()
+    {
+        return ghosts == null ? 0 : ghosts.Count(ghost => ghost != null && ghost.IsPermanentlyDefeated);
+    }
+
+    private static void CheckRevivedGhost(GhostController ghost)
+    {
+        int number = GhostNumber(ghost);
+        Check(!ghost.IsPermanentlyDefeated && ghost.enabled && ghost.currentState == GhostState.Normal
+            && innovation.GetRemainingHits(ghost) == 2,
+            "Revived ghost restores two hits and Normal state");
+        Collider2D collider = ghost.GetComponent<Collider2D>();
+        Check(collider != null && collider.enabled, "Revived ghost collider is enabled");
+        Check(ghostSpawns.ContainsKey(number) && Vector3.Distance(ghost.transform.position, ghostSpawns[number]) < 1.1f,
+            "Revived ghost returns to its world spawn");
+        SpriteRenderer renderer = ghost.GetComponent<SpriteRenderer>();
+        Check(renderer != null && ghostColours.ContainsKey(number)
+            && Vector4.Distance(renderer.color, ghostColours[number]) < 0.001f,
+            "Revived ghost restores its original colour");
+        Canvas canvas = ghost.GetComponentInChildren<Canvas>(true);
+        Check(canvas != null && canvas.gameObject.activeInHierarchy, "Revived ghost health Canvas is active");
+        Animator animator = ghost.GetComponent<Animator>();
+        Check(animator != null && animator.updateMode == AnimatorUpdateMode.Normal
+            && animator.GetInteger("GhostState") == (int)GhostState.Normal,
+            "Revived ghost animator returns to Normal mode");
+        CheckInnovationHealth(ghost, 2);
+    }
+
+    private static void CheckInnovationHealth(GhostController ghost, int remainingHits)
+    {
+        Canvas canvas = ghost.GetComponentInChildren<Canvas>(true);
+        Check(canvas != null, "Ghost health Canvas is assigned");
+        Transform root = canvas.transform.GetComponentsInChildren<Transform>(true)
+            .FirstOrDefault(transform => transform.name == "InnovationHealth");
+        Check(root != null && (remainingHits == 0 || root.gameObject.activeInHierarchy),
+            remainingHits == 0 ? "Ghost health bar root is present while hidden at zero HP" : "Ghost health bar root is active");
+        if (remainingHits == 0)
+            Check(!root.gameObject.activeInHierarchy, "Ghost health bar is hidden at zero HP");
+        Image[] cells = root.GetComponentsInChildren<Image>(true)
+            .Where(image => image.transform.parent == root)
+            .OrderBy(image => image.name).ToArray();
+        Check(cells.Length == 2, "Ghost health bar has two cells");
+        Color32 filled = new Color32(255, 236, 174, 255);
+        Color32 empty = new Color32(70, 38, 24, 255);
+        for (int i = 0; i < cells.Length; i++)
+            Check(!cells[i].raycastTarget && cells[i].color == (i < remainingHits ? filled : empty),
+                "Ghost health bar cell " + (i + 1) + " displays its hit state");
+    }
+
+    private static void CheckNoRespawnAfterGameOver()
+    {
+        MethodInfo updateRespawns = typeof(InnovationController).GetMethod("UpdateRespawns",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Check(updateRespawns != null, "Innovation respawn updater is available for the GameOver guard");
+        updateRespawns.Invoke(innovation, new object[] { 11f });
+        Check(ghosts.All(ghost => ghost != null && ghost.IsPermanentlyDefeated),
+            "GameOver prevents respawn updates from reviving ghosts");
     }
 
     private static void CheckMenuAfterRound(double now)
@@ -747,7 +893,7 @@ public static class InnovationPlayChecks
         if (SceneManager.GetActiveScene().name != "StartScene" || EditorApplication.timeSinceStartup - stageStarted < 3.2) return;
         if (!menuCaptured)
         {
-            CheckDeathSprites();
+            if (!noPopsMode) CheckDeathSprites();
             Check(PlayerPrefs.HasKey(Level2ScoreKey), "Innovation round saves an independent Level 2 record");
             bool level1HadScore = SessionState.GetBool(Flag + ".Level1.HadScore", false);
             bool level1HadTime = SessionState.GetBool(Flag + ".Level1.HadTime", false);
@@ -778,7 +924,7 @@ public static class InnovationPlayChecks
     private static void CheckLevel2Restart(double now)
     {
         if (SceneManager.GetActiveScene().name != "InnovationScene" || ui == null || ui.State != UIManager.RoundState.Countdown) return;
-        Check(ui.CurrentLives == InitialLives && innovation != null && innovation.DefeatedCount == 0
+        Check(ui.CurrentLives == InitialLives && innovation != null
             && innovation.TotalTargets == 4 && ghosts != null && ghosts.Length == 4
             && ghosts.All(ghost => innovation.GetRemainingHits(ghost) == TargetHits),
             "Submitting Level 2 starts a fresh round with full lives and targets");
@@ -825,7 +971,7 @@ public static class InnovationPlayChecks
             Finish("PASSED");
     }
 
-    private static void DefeatGhost(GhostController ghost, bool twoHits)
+    private static void DefeatGhost(GhostController ghost, bool twoHits, bool award300 = true)
     {
         PositionGhost(ghost, new Vector3(4, -1, 0));
         int hits = twoHits ? 2 : 1;
@@ -840,9 +986,12 @@ public static class InnovationPlayChecks
             if (i == hits - 1)
             {
                 Check(ghost.IsPermanentlyDefeated && innovation.GetRemainingHits(ghost) == 0,
-                    "Target reaches permanent defeat after its final hit");
-                Check(ui.CurrentScore == score + 300, "Each popped target awards 300 points once");
+                    "Target enters its respawn cooldown after its final hit");
+                CheckInnovationHealth(ghost, 0);
+                Check(ui.CurrentScore == score + (award300 ? 300 : 0),
+                    award300 ? "Each first popped target awards 300 points once" : "A revived target does not award duplicate pop points");
             }
+            else CheckInnovationHealth(ghost, innovation.GetRemainingHits(ghost));
         }
     }
 

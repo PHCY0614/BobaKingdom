@@ -19,14 +19,13 @@ public class InnovationController : MonoBehaviour
     private readonly List<PearlShot> activeShots = new List<PearlShot>();
     private readonly Dictionary<GhostController, int> ghostHits = new Dictionary<GhostController, int>();
     private readonly HashSet<GhostController> injuredGhosts = new HashSet<GhostController>();
+    private readonly HashSet<GhostController> scoredGhosts = new HashSet<GhostController>();
+    private readonly Dictionary<GhostController, float> respawnTimers = new Dictionary<GhostController, float>();
     private readonly Dictionary<GhostController, Color> originalGhostColours = new Dictionary<GhostController, Color>();
     private float cooldownRemaining, goldenRushRemaining;
     private int shotCharges = 1;
     private Color shotTextColour;
-    private int defeatedCount;
-    private bool completionRequested;
 
-    public int DefeatedCount => defeatedCount;
     public int TotalTargets => targets == null ? 0 : targets.Length;
     public int ActiveShotCount => activeShots.Count;
     public float CooldownRemaining => cooldownRemaining;
@@ -54,7 +53,9 @@ public class InnovationController : MonoBehaviour
         targets = FindObjectsByType<GhostController>(FindObjectsSortMode.None);
         foreach (GhostController ghost in targets)
         {
-            if (ghost != null) ghostHits[ghost] = 0;
+            if (ghost == null) continue;
+            ghostHits[ghost] = 0;
+            ghost.SetHealth(2);
         }
     }
 
@@ -63,6 +64,7 @@ public class InnovationController : MonoBehaviour
         bool running = uiManager != null && uiManager.IsRoundRunning;
         if (running)
         {
+            UpdateRespawns(Time.deltaTime);
             UpdateShotCharge(Time.deltaTime);
             if (Input.GetKeyDown(KeyCode.Space)) TryShoot();
         }
@@ -86,8 +88,44 @@ public class InnovationController : MonoBehaviour
         }
         if (targetStatusText != null)
         {
-            targetStatusText.text = "POPPING PEARLS\n<size=26>" + defeatedCount + " / " + TotalTargets
-                + "</size>\n<size=15>Two hits to pop</size>\n<size=12>PEARLS LEFT " + uiManager.RemainingPellets + "</size>";
+            float nextRespawn = 0f;
+            foreach (float remaining in respawnTimers.Values)
+                if (nextRespawn == 0f || remaining < nextRespawn) nextRespawn = remaining;
+            targetStatusText.text = "PEARLS LEFT\n<size=26>" + uiManager.RemainingPellets
+                + "</size>\n<size=15>Two hits to pop</size>\n<size=12>"
+                + (nextRespawn > 0f ? "NEXT RESPAWN " + Mathf.CeilToInt(nextRespawn) + "s" : "Respawn: 10s") + "</size>";
+        }
+    }
+
+    public float GetRespawnRemaining(GhostController ghost)
+    {
+        float remaining;
+        return ghost != null && respawnTimers.TryGetValue(ghost, out remaining) ? remaining : 0f;
+    }
+
+    private void UpdateRespawns(float seconds)
+    {
+        if (uiManager == null || !uiManager.IsRoundRunning || targets == null) return;
+        foreach (GhostController ghost in targets)
+        {
+            float remaining;
+            if (ghost == null || !respawnTimers.TryGetValue(ghost, out remaining)) continue;
+            remaining = Mathf.Max(0f, remaining - seconds);
+            if (remaining > 0f)
+            {
+                respawnTimers[ghost] = remaining;
+                continue;
+            }
+
+            respawnTimers.Remove(ghost);
+            ghostHits[ghost] = 0;
+            injuredGhosts.Remove(ghost);
+            ghost.ReviveAtSpawn();
+            SpriteRenderer renderer = ghost.GetComponent<SpriteRenderer>();
+            Color original;
+            if (renderer != null && originalGhostColours.TryGetValue(ghost, out original)) renderer.color = original;
+            originalGhostColours.Remove(ghost);
+            ghost.SetHealth(2);
         }
     }
 
@@ -184,6 +222,7 @@ public class InnovationController : MonoBehaviour
         if (hits <= 0) return false;
         int newHitCount = ghostHits[ghost] + 1;
         ghostHits[ghost] = newHitCount;
+        ghost.SetHealth(2 - newHitCount);
         if (hitEffectPrefab != null)
         {
             GameObject effect = Instantiate(hitEffectPrefab, ghost.transform.position, Quaternion.identity);
@@ -203,14 +242,9 @@ public class InnovationController : MonoBehaviour
         }
         else
         {
-            defeatedCount++;
-            uiManager.AddScore(300);
+            if (scoredGhosts.Add(ghost)) uiManager.AddScore(300);
             ghost.DefeatPermanently();
-            if (!completionRequested && defeatedCount >= TotalTargets)
-            {
-                completionRequested = true;
-                uiManager.CompleteInnovation();
-            }
+            respawnTimers[ghost] = 10f;
         }
         return true;
     }
