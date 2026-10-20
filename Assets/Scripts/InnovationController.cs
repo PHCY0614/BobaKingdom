@@ -21,6 +21,7 @@ public class InnovationController : MonoBehaviour
     private readonly HashSet<GhostController> injuredGhosts = new HashSet<GhostController>();
     private readonly Dictionary<GhostController, Color> originalGhostColours = new Dictionary<GhostController, Color>();
     private float cooldownRemaining, goldenRushRemaining;
+    private int shotCharges = 1;
     private Color shotTextColour;
     private int defeatedCount;
     private bool completionRequested;
@@ -29,6 +30,8 @@ public class InnovationController : MonoBehaviour
     public int TotalTargets => targets == null ? 0 : targets.Length;
     public int ActiveShotCount => activeShots.Count;
     public float CooldownRemaining => cooldownRemaining;
+    public int ShotCharges => Mathf.Min(shotCharges, ShotCapacity);
+    public int ShotCapacity => IsGoldenRushActive ? 2 : 1;
     public float GoldenRushRemaining => uiManager != null && uiManager.IsRoundRunning ? goldenRushRemaining : 0f;
     public bool IsGoldenRushActive => GoldenRushRemaining > 0f;
 
@@ -60,13 +63,13 @@ public class InnovationController : MonoBehaviour
         bool running = uiManager != null && uiManager.IsRoundRunning;
         if (running)
         {
-            goldenRushRemaining = Mathf.Max(0f, goldenRushRemaining - Time.deltaTime);
-            cooldownRemaining = Mathf.Max(0f, cooldownRemaining - Time.deltaTime);
-            if (IsGoldenRushActive ? Input.GetKey(KeyCode.Space) : Input.GetKeyDown(KeyCode.Space)) TryShoot();
+            UpdateShotCharge(Time.deltaTime);
+            if (Input.GetKeyDown(KeyCode.Space)) TryShoot();
         }
         else
         {
             goldenRushRemaining = 0f;
+            shotCharges = Mathf.Min(shotCharges, 1);
             if (activeShots.Count > 0) ClearShots();
         }
 
@@ -74,10 +77,12 @@ public class InnovationController : MonoBehaviour
         if (shotStatusText != null)
         {
             shotStatusText.color = IsGoldenRushActive ? new Color32(141, 81, 0, 255) : shotTextColour;
+            string charges = "SHOTS " + ShotCharges + " / " + ShotCapacity;
+            string recharge = ShotCharges < ShotCapacity ? "RECHARGE " + cooldownRemaining.ToString("0.0") + "s" : "READY";
             shotStatusText.text = IsGoldenRushActive
-                ? "GOLDEN RUSH\n<size=12>" + goldenRushRemaining.ToString("0.0") + "s | HOLD SPACE</size>"
-                : cooldownRemaining <= 0f ? "SHOT READY\n<size=15>SPACE to shoot</size>"
-                : "SHOT " + cooldownRemaining.ToString("0.0") + "s\n<size=15>SPACE to shoot</size>";
+                ? "GOLDEN RUSH\n<size=12>" + goldenRushRemaining.ToString("0.0") + "s | " + charges
+                    + "\nSPACE | " + (ShotCharges < ShotCapacity ? "+1: " + cooldownRemaining.ToString("0.0") + "s" : "READY") + "</size>"
+                : charges + "\n<size=12>" + recharge + "\nSPACE to shoot</size>";
         }
         if (targetStatusText != null)
         {
@@ -86,9 +91,28 @@ public class InnovationController : MonoBehaviour
         }
     }
 
+    private void UpdateShotCharge(float seconds)
+    {
+        goldenRushRemaining = Mathf.Max(0f, goldenRushRemaining - seconds);
+        shotCharges = Mathf.Min(shotCharges, ShotCapacity);
+        if (shotCharges >= ShotCapacity)
+        {
+            cooldownRemaining = 0f;
+            return;
+        }
+
+        cooldownRemaining -= seconds;
+        while (cooldownRemaining <= 0f && shotCharges < ShotCapacity)
+        {
+            shotCharges++;
+            cooldownRemaining += 3f;
+        }
+        if (shotCharges >= ShotCapacity) cooldownRemaining = 0f;
+    }
+
     public bool TryShoot()
     {
-        if (uiManager == null || !uiManager.IsRoundRunning || cooldownRemaining > 0f || pacStudent == null)
+        if (uiManager == null || !uiManager.IsRoundRunning || ShotCharges <= 0 || pacStudent == null)
             return false;
         if (projectileSprite == null || goldenPearlMaterial == null)
         {
@@ -106,7 +130,8 @@ public class InnovationController : MonoBehaviour
         shot.Initialize(this, pacStudent.FacingDirection, levelGenerator, uiManager, targets);
         shot.ConfigureAppearance(goldenPearlMaterial, IsGoldenRushActive);
         RegisterShot(shot);
-        cooldownRemaining = IsGoldenRushActive ? 0.6f : 3f;
+        shotCharges--;
+        if (cooldownRemaining <= 0f) cooldownRemaining = 3f;
         if (audioSource != null && shotClip != null) audioSource.PlayOneShot(shotClip);
         return true;
     }
@@ -117,10 +142,15 @@ public class InnovationController : MonoBehaviour
         if (points >= 50)
         {
             goldenRushRemaining = 6f;
+            shotCharges = 2;
             cooldownRemaining = 0f;
             if (pacStudent != null) PearlShot.PlaySparkles(transform, pacStudent.transform.position, goldenPearlMaterial, true);
         }
-        else cooldownRemaining = Mathf.Max(0f, cooldownRemaining - 0.25f);
+        else
+        {
+            cooldownRemaining = Mathf.Max(0f, cooldownRemaining - 0.25f);
+            UpdateShotCharge(0f);
+        }
     }
 
     public void ClearShots()
@@ -138,6 +168,7 @@ public class InnovationController : MonoBehaviour
         ClearShots();
         cooldownRemaining = 0f;
         goldenRushRemaining = 0f;
+        shotCharges = 1;
         ApplyInjuryTints();
     }
 
