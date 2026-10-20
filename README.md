@@ -1,9 +1,9 @@
-# Boba Kingdom
+# Bubble Kingdom
 ### The Popping Pearl Invasion
 
 [English](README.md) | [正體中文（臺灣）](README.zh-TW.md)
 
-![Boba Kingdom main menu](Screenshots/01-main-menu.png)
+![Bubble Kingdom main menu](Screenshots/01-main-menu.png)
 
 A bubble tea themed 2D game. Guide your milk tea through the maze, collect tapioca pearls, and dodge the roaming popping pearls.
 

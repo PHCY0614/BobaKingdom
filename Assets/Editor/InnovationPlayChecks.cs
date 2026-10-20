@@ -639,12 +639,14 @@ public static class InnovationPlayChecks
         {
             PositionGhost(ghosts[0], new Vector3(4, -1, 0));
             innovation.CollectPearl(50);
+            int scoreBeforeInjury = ui.CurrentScore;
             Check(innovation.TryShoot(), "A refilled shot can target a ghost");
             shot = UnityEngine.Object.FindFirstObjectByType<PearlShot>();
             Check(shot != null, "Hit test creates a PearlShot");
             shot.Advance(0.4f); Physics2D.SyncTransforms();
             Check(innovation.GetRemainingHits(ghosts[0]) == 1 && !ghosts[0].IsPermanentlyDefeated,
                 "The first ghost hit injures without popping");
+            Check(ui.CurrentScore == scoreBeforeInjury + 50, "A first-life injury awards 50 points");
             CheckInnovationHealth(ghosts[0], 1);
             Capture("health-injured.png");
             firstHitCaptured = true;
@@ -663,7 +665,7 @@ public static class InnovationPlayChecks
         Check(innovation.GetRespawnRemaining(ghosts[0]) > 9.5f
             && innovation.GetRespawnRemaining(ghosts[0]) <= 10.05f,
             "A popped ghost starts a ten second respawn countdown");
-        Check(ui.CurrentScore == score + 300, "A popped ghost awards 300 points once");
+        Check(ui.CurrentScore == score + 250, "A first-life pop awards 250 points");
         innovation.CollectPearl(50);
         score = ui.CurrentScore;
         Check(innovation.TryShoot(), "A duplicate hit probe can be fired after refill");
@@ -764,12 +766,12 @@ public static class InnovationPlayChecks
             Check(Vector3.Distance(ghosts[0].transform.position, revivedSpawnPosition) > 0.01f,
                 "A revived ghost resumes movement");
             ui.SetGamePaused(true);
-            DefeatGhost(ghosts[0], true, false);
+            DefeatGhost(ghosts[0], true, 25, 125);
             Check(innovation.GetRespawnRemaining(ghosts[0]) > 9.5f,
                 "A revived ghost starts a fresh respawn countdown when popped again");
-            DefeatGhost(ghosts[1], false, true);
-            DefeatGhost(ghosts[2], true, true);
-            DefeatGhost(ghosts[3], true, true);
+            DefeatGhost(ghosts[1], false, 50, 250);
+            DefeatGhost(ghosts[2], true, 50, 250);
+            DefeatGhost(ghosts[3], true, 50, 250);
             Check(PoppedCount() == 4 && ui.State == UIManager.RoundState.Running && ui.RemainingPellets > 0,
                 "All ghosts can be down while the round still waits for pearls");
             int remaining = ui.RemainingPellets;
@@ -971,7 +973,7 @@ public static class InnovationPlayChecks
             Finish("PASSED");
     }
 
-    private static void DefeatGhost(GhostController ghost, bool twoHits, bool award300 = true)
+    private static void DefeatGhost(GhostController ghost, bool twoHits, int firstReward = 50, int finalReward = 250)
     {
         PositionGhost(ghost, new Vector3(4, -1, 0));
         int hits = twoHits ? 2 : 1;
@@ -988,10 +990,15 @@ public static class InnovationPlayChecks
                 Check(ghost.IsPermanentlyDefeated && innovation.GetRemainingHits(ghost) == 0,
                     "Target enters its respawn cooldown after its final hit");
                 CheckInnovationHealth(ghost, 0);
-                Check(ui.CurrentScore == score + (award300 ? 300 : 0),
-                    award300 ? "Each first popped target awards 300 points once" : "A revived target does not award duplicate pop points");
+                Check(ui.CurrentScore == score + finalReward,
+                    "A target's final hit awards its current-life pop reward");
             }
-            else CheckInnovationHealth(ghost, innovation.GetRemainingHits(ghost));
+            else
+            {
+                Check(ui.CurrentScore == score + firstReward,
+                    "A target's first hit awards its current-life injury reward");
+                CheckInnovationHealth(ghost, innovation.GetRemainingHits(ghost));
+            }
         }
     }
 

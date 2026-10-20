@@ -337,7 +337,7 @@ public static class A4PlayChecks
             && level2.GetComponent<UnityEngine.UI.Button>().interactable
             && level2.GetComponentInChildren<TMPro.TextMeshProUGUI>().text == "Play Level 2",
             "Level 2 button is visible and enabled");
-        Check(title.text == "Boba Kingdom", "Menu title is Boba Kingdom");
+        Check(title.text == "Bubble Kingdom", "Menu title is Bubble Kingdom");
         Check(subtitle.text == "The Popping Pearl Invasion", "Menu subtitle is The Popping Pearl Invasion");
         Check(EventSystem.current != null && EventSystem.current.firstSelectedGameObject == level1,
             "Menu initial focus is Level 1");

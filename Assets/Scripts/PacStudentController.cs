@@ -141,7 +141,7 @@ public class PacStudentController : MonoBehaviour
         }
         else
         {
-            uiManager.AddScore(300); ghost.HandleEaten(uiManager);
+            uiManager.AddScoreAtPosition(300, ghost.transform.position); ghost.HandleEaten(uiManager);
             if (audioSource != null && pacEatClip != null) audioSource.PlayOneShot(pacEatClip);
         }
     }

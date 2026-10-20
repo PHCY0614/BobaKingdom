@@ -111,6 +111,12 @@ public class UIManager : MonoBehaviour
         if (!IsRoundRunning) return;
         currentScore += points; UpdateScoreDisplay();
     }
+    public void AddScoreAtPosition(int points, Vector3 worldPosition)
+    {
+        if (!IsRoundRunning || points <= 0) return;
+        AddScore(points);
+        FloatingScore.Show(points, worldPosition, scoreText);
+    }
     public void CollectPellet(int points)
     {
         if (!IsRoundRunning) return;

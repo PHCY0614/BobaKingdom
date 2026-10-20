@@ -19,7 +19,7 @@ public class InnovationController : MonoBehaviour
     private readonly List<PearlShot> activeShots = new List<PearlShot>();
     private readonly Dictionary<GhostController, int> ghostHits = new Dictionary<GhostController, int>();
     private readonly HashSet<GhostController> injuredGhosts = new HashSet<GhostController>();
-    private readonly HashSet<GhostController> scoredGhosts = new HashSet<GhostController>();
+    private readonly Dictionary<GhostController, int> ghostDefeats = new Dictionary<GhostController, int>();
     private readonly Dictionary<GhostController, float> respawnTimers = new Dictionary<GhostController, float>();
     private readonly Dictionary<GhostController, Color> originalGhostColours = new Dictionary<GhostController, Color>();
     private float cooldownRemaining, goldenRushRemaining;
@@ -223,6 +223,16 @@ public class InnovationController : MonoBehaviour
         int newHitCount = ghostHits[ghost] + 1;
         ghostHits[ghost] = newHitCount;
         ghost.SetHealth(2 - newHitCount);
+        int defeats;
+        ghostDefeats.TryGetValue(ghost, out defeats);
+        int points = defeats switch
+        {
+            0 => newHitCount == 1 ? 50 : 250,
+            1 => newHitCount == 1 ? 25 : 125,
+            2 => newHitCount == 2 ? 60 : 0,
+            _ => 0
+        };
+        uiManager.AddScoreAtPosition(points, ghost.transform.position);
         if (hitEffectPrefab != null)
         {
             GameObject effect = Instantiate(hitEffectPrefab, ghost.transform.position, Quaternion.identity);
@@ -242,7 +252,7 @@ public class InnovationController : MonoBehaviour
         }
         else
         {
-            if (scoredGhosts.Add(ghost)) uiManager.AddScore(300);
+            ghostDefeats[ghost] = Mathf.Min(defeats + 1, 3);
             ghost.DefeatPermanently();
             respawnTimers[ghost] = 10f;
         }

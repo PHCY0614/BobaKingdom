@@ -1,9 +1,9 @@
-# Boba Kingdom
+# Bubble Kingdom
 ### The Popping Pearl Invasion
 
 [English](README.md) | [繁體中文](README.zh-TW.md)
 
-![Boba Kingdom main menu](Screenshots/01-main-menu.png)
+![Bubble Kingdom main menu](Screenshots/01-main-menu.png)
 
 一款以珍奶為主題的 2D 遊戲。玩家要操作奶茶收集珍珠，同時避開到處亂竄的爆爆珠。
 
