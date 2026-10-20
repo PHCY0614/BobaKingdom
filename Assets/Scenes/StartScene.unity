@@ -2275,11 +2275,11 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1286649343}
         m_TargetAssemblyTypeName: UIManager, Assembly-CSharp
-        m_MethodName: LoadLevel1
-        m_Mode: 1
+        m_MethodName: LoadLevel2
+        m_Mode: 0
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_ObjectArgumentAssemblyTypeName: 
           m_IntArgument: 0
           m_FloatArgument: 0
           m_StringArgument: 
@@ -3008,7 +3008,7 @@ MonoBehaviour:
   scaredTimerText: {fileID: 0}
   initialLives: 3
   lifeIcons: []
-  deathSequenceDuration: 1.5
+  deathParticleWaitTime: 2
 --- !u!1 &1341107922
 GameObject:
   m_ObjectHideFlags: 0
