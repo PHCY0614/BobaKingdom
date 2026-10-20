@@ -116,12 +116,18 @@ public class UIManager : MonoBehaviour
         if (!IsRoundRunning) return;
         AddScore(points);
         remainingPellets = Mathf.Max(0, remainingPellets - 1);
-        if (Innovation != null) Innovation.CollectPearl(points);
+        if (Innovation != null)
+        {
+            Innovation.CollectPearl(points);
+            if (remainingPellets == 0) CompleteInnovation();
+        }
         else if (remainingPellets == 0) StartCoroutine(EndRound(true));
     }
     public void CompleteInnovation()
     {
-        if (Innovation != null && IsRoundRunning) StartCoroutine(EndRound(true));
+        if (Innovation != null && IsRoundRunning && remainingPellets == 0
+            && Innovation.TotalTargets > 0 && Innovation.DefeatedCount >= Innovation.TotalTargets)
+            StartCoroutine(EndRound(true));
     }
     private void UpdateScoreDisplay() { if (scoreText != null) scoreText.text = "SCORE\n<size=26>" + currentScore.ToString("D6") + "</size>"; }
     public static string FormatTime(float seconds)
@@ -186,7 +192,7 @@ public class UIManager : MonoBehaviour
         }
         SetGamePaused(true); ShowMessage(won ? "Victory!" : "Game Over");
         if (roundDetails != null)
-            roundDetails.text = won ? (Innovation != null ? "All popping pearls defeated" : "All pearls collected") : "Out of lives";
+            roundDetails.text = won ? (Innovation != null ? "All pearls collected. All four popped." : "All pearls collected") : "Out of lives";
         if (roundStats != null)
             roundStats.text = "SCORE<pos=54%>" + currentScore.ToString("D6") + "\nTIME<pos=54%>" + FormatTime(totalTime);
         if (roundReturn != null) roundReturn.text = "Returning to menu...";
