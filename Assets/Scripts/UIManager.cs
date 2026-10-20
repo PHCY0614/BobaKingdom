@@ -8,10 +8,12 @@ public class UIManager : MonoBehaviour
     public TextMeshProUGUI scoreText;
     public TextMeshProUGUI timerText;
     public TextMeshProUGUI scaredTimerText;
+    [SerializeField] private GameObject powerPanel;
     [SerializeField] private int initialLives = 3;
     public GameObject[] lifeIcons;
     [SerializeField] private float deathParticleWaitTime = 2f;
     [SerializeField] private TextMeshProUGUI roundMessage;
+    [SerializeField] private TextMeshProUGUI roundDetails;
     [SerializeField] private GameObject blockingImage;
 
     public enum RoundState { Menu, Countdown, Running, Death, GameOver }
@@ -77,6 +79,7 @@ public class UIManager : MonoBehaviour
 
     private IEnumerator StartRound()
     {
+        if (roundDetails != null) roundDetails.text = "Get ready";
         ShowMessage("3");
         if (audioController != null) audioController.PlayIntro();
         foreach (string message in new[] { "3", "2", "1", "GO!" })
@@ -110,18 +113,22 @@ public class UIManager : MonoBehaviour
         remainingPellets = Mathf.Max(0, remainingPellets - 1);
         if (remainingPellets == 0) StartCoroutine(EndRound(true));
     }
-    private void UpdateScoreDisplay() { if (scoreText != null) scoreText.text = "SCORE: " + currentScore.ToString("D6"); }
+    private void UpdateScoreDisplay() { if (scoreText != null) scoreText.text = "SCORE\n<size=26>" + currentScore.ToString("D6") + "</size>"; }
     public static string FormatTime(float seconds)
     {
         int hundredths = Mathf.FloorToInt(Mathf.Max(0, seconds) * 100f);
-        return string.Format("{0:00}:{1:00}:{2:00}", hundredths / 6000, hundredths / 100 % 60, hundredths % 100);
+        return string.Format("{0:00}:{1:00}.{2:00}", hundredths / 6000, hundredths / 100 % 60, hundredths % 100);
     }
-    private void UpdateTimerDisplay() { if (timerText != null) timerText.text = "TIME: " + FormatTime(totalTime); }
+    private void UpdateTimerDisplay() { if (timerText != null) timerText.text = "TIME\n<size=26>" + FormatTime(totalTime) + "</size>"; }
     private void UpdateScaredTimerDisplay()
     {
-        if (scaredTimerText == null) return;
-        scaredTimerText.gameObject.SetActive(scaredTimeRemaining > 0f);
-        scaredTimerText.text = "Ghost Scared: " + Mathf.CeilToInt(scaredTimeRemaining);
+        bool visible = scaredTimeRemaining > 0f;
+        if (scaredTimerText != null)
+        {
+            scaredTimerText.gameObject.SetActive(visible);
+            scaredTimerText.text = "Power: " + Mathf.CeilToInt(scaredTimeRemaining) + "s";
+        }
+        if (powerPanel != null) powerPanel.SetActive(visible);
     }
     public void StartScaredTimer(float duration)
     {
@@ -163,6 +170,10 @@ public class UIManager : MonoBehaviour
             if (currentLives == 0) { pacStudentController.PlayDeathEffect(); pacStudentController.PlayDeathParticle(); }
         }
         SetGamePaused(true); ShowMessage(won ? "Victory!" : "Game Over");
+        if (roundDetails != null)
+            roundDetails.text = (won ? "All pearls collected" : "Out of lives") + "\n\nSCORE  "
+                + currentScore.ToString("D6") + "\nTIME   " + FormatTime(totalTime)
+                + "\n\n<size=20>Returning to menu...</size>";
         foreach (var button in blockingImage.transform.root.GetComponentsInChildren<UnityEngine.UI.Button>(true)) button.interactable = false;
         SaveRecord(SceneManager.GetActiveScene().name, currentScore, totalTime);
         yield return new WaitForSecondsRealtime(3f);
@@ -175,6 +186,9 @@ public class UIManager : MonoBehaviour
     }
     private void ShowMessage(string message)
     {
+        if (roundDetails != null)
+            ((RectTransform)roundMessage.transform.parent).sizeDelta = State == RoundState.GameOver
+                ? new Vector2(440, 360) : new Vector2(320, 210);
         blockingImage.SetActive(true); roundMessage.text = message;
     }
     private void HideMessage() { blockingImage.SetActive(false); }
@@ -192,11 +206,16 @@ public class UIManager : MonoBehaviour
     {
         foreach (var label in FindObjectsByType<TextMeshProUGUI>(FindObjectsSortMode.None))
         {
-            int level = label.name.StartsWith("Level 1 -") ? 1 : label.name.StartsWith("Level 2 -") ? 2 : 0;
-            if (level == 0) continue;
-            string scene = level == 1 ? "Level1Scene" : "InnovationScene";
-            if (label.name.EndsWith("HighScoreText")) label.text = "HIGH SCORE: " + PlayerPrefs.GetInt(ScoreKey(scene), 0).ToString("D6");
-            else if (label.name.EndsWith("TimeText")) label.text = "TIME: " + FormatTime(PlayerPrefs.GetFloat(TimeKey(scene), 0f));
+            if (!label.name.StartsWith("Level 1 -")) continue;
+            string scoreKey = ScoreKey("Level1Scene");
+            if (!PlayerPrefs.HasKey(scoreKey))
+            {
+                if (label.name.EndsWith("HighScoreText")) label.text = "No record yet";
+                else if (label.name.EndsWith("TimeText")) label.text = "Play to set your first score";
+                continue;
+            }
+            if (label.name.EndsWith("HighScoreText")) label.text = "HIGH SCORE<pos=62%>" + PlayerPrefs.GetInt(scoreKey).ToString("D6");
+            else if (label.name.EndsWith("TimeText")) label.text = "RUN TIME<pos=62%>" + FormatTime(PlayerPrefs.GetFloat(TimeKey("Level1Scene"), 0f));
         }
     }
     void OnDestroy() { Time.timeScale = 1f; }
