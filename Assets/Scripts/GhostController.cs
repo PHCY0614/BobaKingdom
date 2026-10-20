@@ -252,10 +252,11 @@ public class GhostController : MonoBehaviour
         rootRect.anchorMin = new Vector2(0.5f, 0.5f);
         rootRect.anchorMax = new Vector2(0.5f, 0.5f);
         rootRect.pivot = new Vector2(0.5f, 0.5f);
-        rootRect.sizeDelta = new Vector2(14f, 6f);
+        rootRect.sizeDelta = new Vector2(14f, 3f);
         TMPro.TextMeshProUGUI label = worldCanvas.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
         Vector2 labelPosition = label != null ? label.rectTransform.anchoredPosition : Vector2.zero;
-        rootRect.anchoredPosition = labelPosition + new Vector2(0f, -11f);
+        rootRect.anchoredPosition = labelPosition;
+        if (label != null) label.enabled = false;
 
         UnityEngine.UI.Image background = innovationHealthRoot.GetComponent<UnityEngine.UI.Image>();
         background.color = new Color32(70, 38, 24, 255);
@@ -271,7 +272,7 @@ public class GhostController : MonoBehaviour
             cellRect.anchorMin = new Vector2(0.5f, 0.5f);
             cellRect.anchorMax = new Vector2(0.5f, 0.5f);
             cellRect.pivot = new Vector2(0.5f, 0.5f);
-            cellRect.sizeDelta = new Vector2(5.5f, 5f);
+            cellRect.sizeDelta = new Vector2(5.5f, 2f);
             cellRect.anchoredPosition = new Vector2(i == 0 ? -4f : 4f, 0f);
             innovationHealthCells[i] = cellObject.GetComponent<UnityEngine.UI.Image>();
             innovationHealthCells[i].raycastTarget = false;
