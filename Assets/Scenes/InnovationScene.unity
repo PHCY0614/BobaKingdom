@@ -24882,6 +24882,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   projectileSprite: {fileID: 21300000, guid: c06d44fc5ac90a14182602e2ff2bda0a, type: 3}
+  goldenPearlMaterial: {fileID: 2100000, guid: 21496cc684f02af4c99bdbabc8349792, type: 2}
   hitEffectPrefab: {fileID: 583828679320850342, guid: 1c4611faba1a0674780c4914c5296bdd, type: 3}
   shotClip: {fileID: 8300000, guid: a04098152364b7b4d983441853fcd669, type: 3}
   hitClip: {fileID: 8300000, guid: 4a56071575057d44386de4e0b491528d, type: 3}
@@ -48259,7 +48260,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 24, y: -506}
-  m_SizeDelta: {x: 168, y: 100}
+  m_SizeDelta: {x: 168, y: 120}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &1539490831
 MonoBehaviour:

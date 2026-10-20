@@ -1,10 +1,11 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
 public class InnovationController : MonoBehaviour
 {
     [SerializeField] private Sprite projectileSprite;
+    [SerializeField] private Material goldenPearlMaterial;
     [SerializeField] private GameObject hitEffectPrefab;
     [SerializeField] private AudioClip shotClip, hitClip;
     [SerializeField] private TMP_Text shotStatusText, targetStatusText;
@@ -19,7 +20,8 @@ public class InnovationController : MonoBehaviour
     private readonly Dictionary<GhostController, int> ghostHits = new Dictionary<GhostController, int>();
     private readonly HashSet<GhostController> injuredGhosts = new HashSet<GhostController>();
     private readonly Dictionary<GhostController, Color> originalGhostColours = new Dictionary<GhostController, Color>();
-    private float cooldownRemaining;
+    private float cooldownRemaining, goldenRushRemaining;
+    private Color shotTextColour;
     private int defeatedCount;
     private bool completionRequested;
 
@@ -27,6 +29,8 @@ public class InnovationController : MonoBehaviour
     public int TotalTargets => targets == null ? 0 : targets.Length;
     public int ActiveShotCount => activeShots.Count;
     public float CooldownRemaining => cooldownRemaining;
+    public float GoldenRushRemaining => uiManager != null && uiManager.IsRoundRunning ? goldenRushRemaining : 0f;
+    public bool IsGoldenRushActive => GoldenRushRemaining > 0f;
 
     private void Awake()
     {
@@ -41,6 +45,7 @@ public class InnovationController : MonoBehaviour
 
     private void Start()
     {
+        if (shotStatusText != null) shotTextColour = shotStatusText.color;
         pacStudent = FindFirstObjectByType<PacStudentController>();
         levelGenerator = FindFirstObjectByType<LevelGenerator>();
         targets = FindObjectsByType<GhostController>(FindObjectsSortMode.None);
@@ -55,25 +60,29 @@ public class InnovationController : MonoBehaviour
         bool running = uiManager != null && uiManager.IsRoundRunning;
         if (running)
         {
+            goldenRushRemaining = Mathf.Max(0f, goldenRushRemaining - Time.deltaTime);
             cooldownRemaining = Mathf.Max(0f, cooldownRemaining - Time.deltaTime);
-            if (Input.GetKeyDown(KeyCode.Space)) TryShoot();
+            if (IsGoldenRushActive ? Input.GetKey(KeyCode.Space) : Input.GetKeyDown(KeyCode.Space)) TryShoot();
         }
-        else if (activeShots.Count > 0)
+        else
         {
-            ClearShots();
+            goldenRushRemaining = 0f;
+            if (activeShots.Count > 0) ClearShots();
         }
 
         if (shotPanel != null) shotPanel.SetActive(running);
         if (shotStatusText != null)
         {
-            shotStatusText.text = cooldownRemaining <= 0f
-                ? "SHOT READY\n<size=15>SPACE to shoot</size>"
+            shotStatusText.color = IsGoldenRushActive ? new Color32(141, 81, 0, 255) : shotTextColour;
+            shotStatusText.text = IsGoldenRushActive
+                ? "GOLDEN RUSH\n<size=12>" + goldenRushRemaining.ToString("0.0") + "s | HOLD SPACE</size>"
+                : cooldownRemaining <= 0f ? "SHOT READY\n<size=15>SPACE to shoot</size>"
                 : "SHOT " + cooldownRemaining.ToString("0.0") + "s\n<size=15>SPACE to shoot</size>";
         }
         if (targetStatusText != null)
         {
             targetStatusText.text = "POPPING PEARLS\n<size=26>" + defeatedCount + " / " + TotalTargets
-                + "</size>\n<size=15>Two hits to pop</size>";
+                + "</size>\n<size=15>Two hits to pop</size>\n<size=12>Big pearls grant\nGolden Rush</size>";
         }
     }
 
@@ -81,9 +90,9 @@ public class InnovationController : MonoBehaviour
     {
         if (uiManager == null || !uiManager.IsRoundRunning || cooldownRemaining > 0f || pacStudent == null)
             return false;
-        if (projectileSprite == null)
+        if (projectileSprite == null || goldenPearlMaterial == null)
         {
-            Debug.LogError("InnovationController requires a projectileSprite.", this);
+            Debug.LogError("InnovationController requires a projectile sprite and golden material.", this);
             return false;
         }
 
@@ -95,8 +104,9 @@ public class InnovationController : MonoBehaviour
         shotObject.transform.localScale = Vector3.one * 0.75f;
         PearlShot shot = shotObject.AddComponent<PearlShot>();
         shot.Initialize(this, pacStudent.FacingDirection, levelGenerator, uiManager, targets);
+        shot.ConfigureAppearance(goldenPearlMaterial, IsGoldenRushActive);
         RegisterShot(shot);
-        cooldownRemaining = 3f;
+        cooldownRemaining = IsGoldenRushActive ? 0.6f : 3f;
         if (audioSource != null && shotClip != null) audioSource.PlayOneShot(shotClip);
         return true;
     }
@@ -104,7 +114,13 @@ public class InnovationController : MonoBehaviour
     public void CollectPearl(int points)
     {
         if (uiManager == null || !uiManager.IsRoundRunning) return;
-        cooldownRemaining = points >= 50 ? 0f : Mathf.Max(0f, cooldownRemaining - 0.25f);
+        if (points >= 50)
+        {
+            goldenRushRemaining = 6f;
+            cooldownRemaining = 0f;
+            if (pacStudent != null) PearlShot.PlaySparkles(transform, pacStudent.transform.position, goldenPearlMaterial, true);
+        }
+        else cooldownRemaining = Mathf.Max(0f, cooldownRemaining - 0.25f);
     }
 
     public void ClearShots()
@@ -121,6 +137,7 @@ public class InnovationController : MonoBehaviour
     {
         ClearShots();
         cooldownRemaining = 0f;
+        goldenRushRemaining = 0f;
         ApplyInjuryTints();
     }
 
@@ -141,6 +158,7 @@ public class InnovationController : MonoBehaviour
             GameObject effect = Instantiate(hitEffectPrefab, ghost.transform.position, Quaternion.identity);
             Destroy(effect, 2f);
         }
+        PearlShot.PlaySparkles(transform, ghost.transform.position, goldenPearlMaterial, false);
         if (audioSource != null && hitClip != null) audioSource.PlayOneShot(hitClip);
 
         if (newHitCount == 1)
