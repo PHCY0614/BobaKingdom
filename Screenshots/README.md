@@ -10,5 +10,7 @@
 | [04-level-2-pearl-shot.png](04-level-2-pearl-shot.png) | Golden projectile and hit feedback |
 | [05-level-2-health.png](05-level-2-health.png) | Two-cell enemy health display |
 | [06-victory.png](06-victory.png) | Victory results screen |
+| [07-game-over.png](07-game-over.png) | Game Over results screen |
+| [08-ready.png](08-ready.png) | Countdown and movement/shooting instructions |
 
 Captured from the game without Unity Editor panels. These are gameplay showcase frames, rather than a recorded complete playthrough. Original game artwork is unchanged.
