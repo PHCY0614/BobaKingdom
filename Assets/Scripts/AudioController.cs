@@ -2,6 +2,9 @@ using UnityEngine;
 
 public class AudioController : MonoBehaviour
 {
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void SetDefaultVolume() { AudioListener.volume = 0.8f; }
+
     public AudioSource audioSource;
     public AudioClip bgmIntro, bgmGhostNormal, bgmGhostScared, bgmGhostDead;
     private UIManager uiManager;

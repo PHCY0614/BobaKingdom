@@ -107,8 +107,8 @@ public static class A4PlayChecks
                 var map = UnityEngine.Object.FindFirstObjectByType<LevelGenerator>();
                 Check(ghosts.Length == 4 && ghosts.All(g => map.IsGhostSpawn(map.WorldToGrid(g.transform.position))), "All ghosts remain in the house during countdown");
                 var countdownDetails = (TMPro.TextMeshProUGUI)new SerializedObject(ui).FindProperty("roundDetails").objectReferenceValue;
-                Check(countdownDetails != null && countdownDetails.text == "Get ready", "Countdown displays Get ready");
-                CheckResultOverlay(ui, false, "Get ready");
+                Check(countdownDetails != null && countdownDetails.text == "Get ready\n\n<size=21>WASD to move</size>", "Countdown displays movement instructions");
+                CheckResultOverlay(ui, false, countdownDetails.text);
                 CheckAudio(ui.AudioController.audioSource, ui.AudioController.bgmIntro, "Countdown music");
                 CheckListenerOutput();
                 Capture("countdown.png"); Next(now);

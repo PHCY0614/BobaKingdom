@@ -83,15 +83,23 @@ public class UIManager : MonoBehaviour
     private IEnumerator StartRound()
     {
         if (roundDetails != null) roundDetails.text = Innovation != null
-            ? "Get ready\n<size=18>WASD to move | SPACE to shoot</size>"
-            : "Get ready";
+            ? "Get ready\n\n<size=21>WASD to move\nSPACE to shoot</size>"
+            : "Get ready\n\n<size=21>WASD to move</size>";
         ShowMessage("3");
         if (audioController != null) audioController.PlayIntro();
-        foreach (string message in new[] { "3", "2", "1", "GO!" })
+        SpawnArrow arrow = pacStudentController == null ? null
+            : SpawnArrow.Create(pacStudentController.transform, roundMessage.canvas.rootCanvas);
+        foreach (string message in new[] { "3", "2", "1" })
         {
             ShowMessage(message);
-            yield return new WaitForSecondsRealtime(1f);
+            if (arrow != null) arrow.enabled = true;
+            yield return new WaitForSecondsRealtime(0.5f);
+            if (arrow != null) arrow.enabled = false;
+            yield return new WaitForSecondsRealtime(0.5f);
         }
+        if (arrow != null) Destroy(arrow.gameObject);
+        ShowMessage("GO!");
+        yield return new WaitForSecondsRealtime(1f);
         HideMessage(); State = RoundState.Running;
         if (audioController != null) audioController.RefreshGhostMusic();
     }
@@ -208,14 +216,12 @@ public class UIManager : MonoBehaviour
         if (roundDetails != null)
         {
             ((RectTransform)roundMessage.transform.parent).sizeDelta = ended
-                ? new Vector2(440, 360) : Innovation != null ? new Vector2(400, 230) : new Vector2(320, 210);
-            if (ended)
-            {
-                RectTransform details = roundDetails.rectTransform;
-                details.anchorMin = details.anchorMax = details.pivot = new Vector2(0.5f, 1f);
-                details.anchoredPosition = new Vector2(0, -114);
-                details.sizeDelta = new Vector2(400, 36);
-            }
+                ? new Vector2(440, 360) : Innovation != null ? new Vector2(360, 270) : new Vector2(340, 240);
+            RectTransform details = roundDetails.rectTransform;
+            details.anchorMin = details.anchorMax = details.pivot = new Vector2(0.5f, 1f);
+            details.anchoredPosition = new Vector2(0, -114);
+            details.sizeDelta = ended ? new Vector2(400, 36)
+                : Innovation != null ? new Vector2(320, 112) : new Vector2(300, 88);
         }
         if (roundStats != null) roundStats.transform.parent.gameObject.SetActive(ended);
         if (roundReturn != null) roundReturn.gameObject.SetActive(ended);
